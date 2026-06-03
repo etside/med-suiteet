@@ -32,3 +32,6 @@ public/uploads/
 *.sw?
 
 # Removed: supabase/ — project uses MySQL only
+
+# Local Netlify folder
+.netlify
