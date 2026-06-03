@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { Package, ShoppingCart, TrendingUp, AlertTriangle, DollarSign, Clock } from "lucide-react";
+import { Package, ShoppingCart, TrendingUp, AlertTriangle, DollarSign, Clock, Users, BarChart3, FileText, Settings } from "lucide-react";
+import { Button } from "@/components/ui/button";
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, PieChart, Pie, Cell } from "recharts";
 import { api } from "@/lib/api";
 import { useAuth } from "@/contexts/AuthContext";
@@ -83,12 +84,21 @@ const Dashboard = () => {
   }
 
   const kpiData = [
-    { title: "Today's Sales", value: "৳" + todaySales.toLocaleString(), icon: DollarSign, color: "text-emerald-600" },
-    { title: "Total Products", value: String(productCount), icon: Package, color: "text-blue-600" },
-    { title: "Pending Orders", value: String(pendingOrders), icon: ShoppingCart, color: "text-amber-600" },
-    { title: "Low Stock Alerts", value: String(lowStockCount), icon: AlertTriangle, color: "text-destructive" },
-    { title: "Monthly Revenue", value: "৳" + monthlyRevenue.toLocaleString(), icon: TrendingUp, color: "text-primary" },
-    { title: "Expiring Soon", value: String(expiringCount), icon: Clock, color: "text-amber-500" },
+    { title: "Today's Sales", value: "৳" + todaySales.toLocaleString(), icon: DollarSign, color: "text-emerald-600", path: "/admin/sales" },
+    { title: "Total Products", value: String(productCount), icon: Package, color: "text-blue-600", path: "/admin/inventory" },
+    { title: "Pending Orders", value: String(pendingOrders), icon: ShoppingCart, color: "text-amber-600", path: "/admin/orders" },
+    { title: "Low Stock Alerts", value: String(lowStockCount), icon: AlertTriangle, color: "text-destructive", path: "/admin/inventory" },
+    { title: "Monthly Revenue", value: "৳" + monthlyRevenue.toLocaleString(), icon: TrendingUp, color: "text-primary", path: "/admin/reports" },
+    { title: "Expiring Soon", value: String(expiringCount), icon: Clock, color: "text-amber-500", path: "/admin/inventory" },
+  ];
+
+  const quickActions = [
+    { title: "Customer Ledger", icon: Users, path: "/admin/customers" },
+    { title: "Inventory", icon: Package, path: "/admin/inventory" },
+    { title: "Orders", icon: ShoppingCart, path: "/admin/orders" },
+    { title: "Sales", icon: BarChart3, path: "/admin/sales" },
+    { title: "Reports", icon: FileText, path: "/admin/reports" },
+    { title: "Users", icon: Settings, path: "/admin/users" },
   ];
 
   return (
@@ -97,9 +107,30 @@ const Dashboard = () => {
         <h1 className="text-xl sm:text-2xl font-bold text-foreground">Dashboard</h1>
         <p className="text-xs sm:text-sm text-muted-foreground">Welcome to Medsuite-eT Pharmacy Management</p>
       </div>
+
+      {/* Quick Actions */}
+      <div className="grid gap-2 grid-cols-2 sm:grid-cols-3 lg:grid-cols-6">
+        {quickActions.map((action) => (
+          <Button
+            key={action.title}
+            variant="outline"
+            className="h-auto flex flex-col items-center gap-2 p-4 cursor-pointer hover:border-primary/50 hover:bg-primary/5 transition-colors"
+            onClick={() => navigate(action.path)}
+          >
+            <action.icon className="h-5 w-5" />
+            <span className="text-[10px] sm:text-xs text-center leading-tight">{action.title}</span>
+          </Button>
+        ))}
+      </div>
+
+      {/* KPI Cards */}
       <div className="grid gap-3 sm:gap-4 grid-cols-2 lg:grid-cols-3">
         {kpiData.map((kpi) => (
-          <Card key={kpi.title}>
+          <Card 
+            key={kpi.title}
+            className="cursor-pointer hover:border-primary/50 hover:bg-muted/50 transition-colors"
+            onClick={() => navigate(kpi.path)}
+          >
             <CardHeader className="flex flex-row items-center justify-between pb-1 sm:pb-2 p-3 sm:p-6">
               <CardTitle className="text-[10px] sm:text-sm font-medium text-muted-foreground leading-tight">{kpi.title}</CardTitle>
               <kpi.icon className={`h-4 w-4 sm:h-5 sm:w-5 shrink-0 ${kpi.color}`} />
@@ -110,6 +141,8 @@ const Dashboard = () => {
           </Card>
         ))}
       </div>
+
+      {/* Charts */}
       <div className="grid gap-3 sm:gap-4 lg:grid-cols-2">
         <Card>
           <CardHeader className="p-3 sm:p-6">
