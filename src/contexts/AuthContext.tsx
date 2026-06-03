@@ -46,9 +46,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     setApprovalStatus("approved");
   };
 
-  const isStaff = roles.includes("staff") || roles.includes("admin") || roles.includes("super_admin");
-  const isAdmin = roles.includes("admin") || roles.includes("super_admin");
-  const isSuperAdmin = roles.includes("super_admin");
+  const isStaff = Array.isArray(roles) && (roles.includes("staff") || roles.includes("admin") || roles.includes("super_admin"));
+  const isAdmin = Array.isArray(roles) && (roles.includes("admin") || roles.includes("super_admin"));
+  const isSuperAdmin = Array.isArray(roles) && roles.includes("super_admin");
 
   return (
     <AuthContext.Provider value={{ user, loading, roles, isStaff, isAdmin, isSuperAdmin, approvalStatus, signOut, refresh }}>
