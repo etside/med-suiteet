@@ -72,7 +72,12 @@ exports.handler = async (event, context) => {
 // Login endpoint
 async function handleLogin(event, origin) {
   try {
-    const body = JSON.parse(event.body);
+    // Netlify Functions base64-encodes the body, so decode it if needed
+    let bodyStr = event.body;
+    if (event.isBase64Encoded) {
+      bodyStr = Buffer.from(event.body, 'base64').toString('utf-8');
+    }
+    const body = JSON.parse(bodyStr);
     const { email, password } = body;
 
     if (!email || !password) {
@@ -133,7 +138,12 @@ async function handleLogin(event, origin) {
 // Signup endpoint
 async function handleSignup(event, origin) {
   try {
-    const body = JSON.parse(event.body);
+    // Netlify Functions base64-encodes the body, so decode it if needed
+    let bodyStr = event.body;
+    if (event.isBase64Encoded) {
+      bodyStr = Buffer.from(event.body, 'base64').toString('utf-8');
+    }
+    const body = JSON.parse(bodyStr);
     const { email, password } = body;
 
     if (!email || !password) {
