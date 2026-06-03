@@ -136,7 +136,9 @@ async function handleLogin(event, origin) {
       body: JSON.stringify({ 
         data: {
           token, 
-          user: { id: user.id, email: user.email, role: user.role }
+          user: { id: user.id, email: user.email },
+          roles: [user.role],
+          approval_status: 'approved'
         }
       })
     };
@@ -204,7 +206,9 @@ async function handleSignup(event, origin) {
       body: JSON.stringify({ 
         data: {
           token, 
-          user: { id: user.id, email: user.email, role: user.role }
+          user: { id: user.id, email: user.email },
+          roles: [user.role],
+          approval_status: 'approved'
         }
       })
     };
@@ -270,7 +274,13 @@ async function handleGetUser(event, origin) {
     return {
       statusCode: 200,
       headers: corsHeaders(origin),
-      body: JSON.stringify({ data: result.rows[0] })
+      body: JSON.stringify({ 
+        data: {
+          user: { id: result.rows[0].id, email: result.rows[0].email },
+          roles: [result.rows[0].role],
+          approval_status: 'approved'
+        }
+      })
     };
   } catch (error) {
     console.error('User error:', error);
