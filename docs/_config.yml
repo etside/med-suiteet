@@ -1,0 +1,13 @@
+title: Medsuite-eT - Pharmacy Management SaaS
+description: Complete pharmacy management system for Bangladesh with MySQL backend and PWA support
+theme: jekyll-theme-primer
+markdown: kramdown
+
+# GitHub Pages settings
+remote_theme: pages-themes/primer@v0.6.0
+plugins:
+  - jekyll-remote-theme
+
+# Site settings
+url: https://etside.github.io/med-suiteet
+baseurl: /med-suiteet
