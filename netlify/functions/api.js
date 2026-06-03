@@ -37,12 +37,12 @@ exports.handler = async (event, context) => {
     const { action, email, password, search } = event.queryStringParameters || {};
     const authHeader = event.headers.authorization;
 
-    // Routes
-    if (action === 'login' && event.httpMethod === 'POST') {
+    // Routes - accept both old and new action names
+    if ((action === 'login' || action === 'auth_login') && event.httpMethod === 'POST') {
       return await handleLogin(event, origin);
     }
     
-    if (action === 'signup' && event.httpMethod === 'POST') {
+    if ((action === 'signup' || action === 'auth_signup') && event.httpMethod === 'POST') {
       return await handleSignup(event, origin);
     }
     
@@ -123,7 +123,14 @@ async function handleLogin(event, origin) {
     return {
       statusCode: 200,
       headers: corsHeaders(origin),
-      body: JSON.stringify({ token, user: { id: user.id, email: user.email, role: user.role } })
+      body: JSON.stringify({
+        data: {
+          token,
+          user: { id: user.id, email: user.email },
+          roles: [user.role],
+          approval_status: 'approved'
+        }
+      })
     };
   } catch (error) {
     console.error('Login error:', error);
@@ -186,7 +193,14 @@ async function handleSignup(event, origin) {
     return {
       statusCode: 201,
       headers: corsHeaders(origin),
-      body: JSON.stringify({ token, user })
+      body: JSON.stringify({
+        data: {
+          token,
+          user: { id: user.id, email: user.email },
+          roles: [user.role],
+          approval_status: 'approved'
+        }
+      })
     };
   } catch (error) {
     console.error('Signup error:', error);
@@ -206,7 +220,7 @@ async function handleProducts(event, origin) {
     return {
       statusCode: 200,
       headers: corsHeaders(origin),
-      body: JSON.stringify(result.rows)
+      body: JSON.stringify({ data: result.rows })
     };
   } catch (error) {
     console.error('Products error:', error);
@@ -247,10 +261,18 @@ async function handleGetUser(event, origin) {
       };
     }
 
+    const user = result.rows[0];
     return {
       statusCode: 200,
       headers: corsHeaders(origin),
-      body: JSON.stringify(result.rows[0])
+      body: JSON.stringify({
+        data: {
+          user: { id: user.id, email: user.email },
+          roles: [user.role],
+          profile: {},
+          approval_status: 'approved'
+        }
+      })
     };
   } catch (error) {
     console.error('User error:', error);
