@@ -1,9 +1,17 @@
 /**
- * Medsuite-eT — MySQL API client (PHP backend)
+ * Medsuite-eT — REST API client (MySQL & PostgreSQL support)
+ * Supports both MySQL and PostgreSQL backends
  */
 
-const API_BASE = import.meta.env.VITE_API_URL || "/.netlify/functions/api";
+// Use environment variable or default to Netlify functions
+const API_BASE = import.meta.env.VITE_API_BASE || 
+  (import.meta.env.VITE_API_URL || "/.netlify/functions/api");
+
+// Alternative PostgreSQL endpoint (optional)
+export const POSTGRES_API_URL = import.meta.env.VITE_POSTGRES_API || null;
+
 const TOKEN_KEY = "medsuite_et_token";
+const AUTH_METHOD_KEY = "medsuite_et_auth_method";
 
 export type AppRole = "admin" | "staff" | "customer" | "super_admin";
 
@@ -82,10 +90,54 @@ export const api = {
           roles: AppRole[];
           approval_status: string;
         };
-      }>("login", { method: "POST", body: { email, password } });
+      }>("auth_login", { method: "POST", body: { email, password } });
       setToken(res.data.token);
+      localStorage.setItem(AUTH_METHOD_KEY, "password");
       return res.data;
     },
+    
+    loginWithPIN: async (email: string, pin: string) => {
+      const res = await request<{
+        data: {
+          token: string;
+          user: AppUser;
+          roles: AppRole[];
+        };
+      }>("auth_pin", { method: "POST", body: { email, pin } });
+      setToken(res.data.token);
+      localStorage.setItem(AUTH_METHOD_KEY, "pin");
+      return res.data;
+    },
+    
+    loginWithBiometric: async (email: string, credential: any) => {
+      const res = await request<{
+        data: {
+          token: string;
+          user: AppUser;
+          roles: AppRole[];
+        };
+      }>("auth_biometric", { method: "POST", body: { email, credential } });
+      setToken(res.data.token);
+      localStorage.setItem(AUTH_METHOD_KEY, "biometric");
+      return res.data;
+    },
+    
+    enrollBiometric: (credential: any) =>
+      request("auth_enroll_biometric", { method: "POST", body: { credential }, auth: true }),
+    
+    setPIN: (currentPassword: string, newPin: string) =>
+      request("auth_set_pin", { 
+        method: "POST", 
+        body: { current_password: currentPassword, new_pin: newPin },
+        auth: true 
+      }),
+    
+    getAuthLogs: (limit: number = 50) =>
+      request<{ data: any[] }>("auth_logs", { 
+        query: { limit: limit.toString() },
+        auth: true 
+      }).then(r => r.data),
+    
     signup: (full_name: string, email: string, password: string) =>
       request<{ data: { message: string } }>("signup", {
         method: "POST",
@@ -104,6 +156,7 @@ export const api = {
       request("auth_password", { method: "POST", body: { password } }),
     logout: () => {
       setToken(null);
+      localStorage.removeItem(AUTH_METHOD_KEY);
       return Promise.resolve();
     },
   },
@@ -182,6 +235,40 @@ export const api = {
   },
 
   dashboard: () => request<{ data: DashboardStats }>("dashboard").then((r) => r.data),
+
+  cms: {
+    list: (query?: { category?: string; status?: string; page?: string; limit?: string }) =>
+      request<{ data: Record<string, unknown>[] }>("cms_content", { 
+        query: query as Record<string, string> 
+      }).then((r) => r.data),
+    
+    get: (id: string) =>
+      request<{ data: Record<string, unknown> }>("cms_content", { 
+        query: { id } 
+      }).then((r) => r.data),
+    
+    create: (payload: Record<string, unknown>) =>
+      request<{ data: { id: string } }>("cms_content", { 
+        method: "POST", 
+        body: payload,
+        auth: true 
+      }).then((r) => r.data),
+    
+    update: (id: string, payload: Record<string, unknown>) =>
+      request("cms_content", { 
+        method: "PUT", 
+        query: { id }, 
+        body: payload,
+        auth: true 
+      }),
+    
+    delete: (id: string) =>
+      request("cms_content", { 
+        method: "DELETE", 
+        query: { id },
+        auth: true 
+      }),
+  },
 
   upload: (file: File) => {
     const fd = new FormData();

@@ -39,6 +39,11 @@ function bearer_token(): ?string
     return null;
 }
 
+function get_bearer_token(): ?string
+{
+    return bearer_token();
+}
+
 function create_token(string $userId, string $secret, int $ttl = 604800): string
 {
     $payload = base64_encode(json_encode([
@@ -49,8 +54,11 @@ function create_token(string $userId, string $secret, int $ttl = 604800): string
     return $payload . '.' . $sig;
 }
 
-function verify_token(string $token, string $secret): ?string
+function verify_token($pdo, ?string $token, string $secret): ?array
 {
+    if (!$token) {
+        return null;
+    }
     $parts = explode('.', $token, 2);
     if (count($parts) !== 2) {
         return null;
@@ -63,7 +71,11 @@ function verify_token(string $token, string $secret): ?string
     if (!is_array($data) || empty($data['sub']) || empty($data['exp']) || $data['exp'] < time()) {
         return null;
     }
-    return (string) $data['sub'];
+    
+    $userId = (int) $data['sub'];
+    $stmt = $pdo->prepare('SELECT id, email FROM users WHERE id = ?');
+    $stmt->execute([$userId]);
+    return $stmt->fetch() ?: null;
 }
 
 function current_user_id(PDO $pdo, array $config): ?string

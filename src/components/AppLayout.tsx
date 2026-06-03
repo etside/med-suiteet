@@ -2,6 +2,7 @@ import { SidebarProvider, SidebarTrigger } from "@/components/ui/sidebar";
 import { AppSidebar } from "@/components/AppSidebar";
 import { NotificationBell } from "@/components/NotificationBell";
 import { MobileNav } from "@/components/MobileNav";
+import { ThemeSwitcher } from "@/components/ThemeSwitcher";
 import Footer from "@/components/Footer";
 
 export function AppLayout({ children }: { children: React.ReactNode }) {
@@ -16,7 +17,10 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
               <img src="/logo.png" alt="Medsuite-eT" className="h-6 w-6 rounded object-contain sm:hidden" />
               <h2 className="text-lg font-semibold text-foreground hidden sm:block">Medsuite-eT</h2>
             </div>
-            <NotificationBell />
+            <div className="flex items-center gap-2">
+              <ThemeSwitcher />
+              <NotificationBell />
+            </div>
           </header>
           <main className="flex-1 overflow-auto p-4 md:p-6 pb-20 md:pb-6">{children}</main>
           <Footer />
