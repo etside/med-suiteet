@@ -7,34 +7,26 @@ interface PageTransitionProps {
 
 export const PageTransition = ({ children }: PageTransitionProps) => {
   const pageVariants = {
-    initial: {
-      opacity: 0,
-      y: 20,
-    },
-    in: {
-      opacity: 1,
-      y: 0,
-    },
-    out: {
-      opacity: 0,
-      y: -20,
-    },
+    initial: { opacity: 0, y: 12 },
+    in: { opacity: 1, y: 0 },
+    out: { opacity: 0, y: -8 },
   };
 
   const pageTransition = {
     type: "tween" as const,
-    ease: [0.25, 0.1, 0.25, 1] as const,
-    duration: 0.35,
+    ease: [0.22, 1, 0.36, 1] as const,
+    duration: 0.28,
   };
 
   return (
     <motion.div
+      layout
       initial="initial"
       animate="in"
       exit="out"
       variants={pageVariants}
       transition={pageTransition}
-      style={{ width: "100%" }}
+      className="w-full min-h-0"
     >
       {children}
     </motion.div>

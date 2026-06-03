@@ -1,5 +1,6 @@
-// netlify/functions/api.js - Main API endpoint handler
+// netlify/functions/api.js - Main API endpoint handler (aligned with src/lib/api.ts actions)
 const jwt = require('jsonwebtoken');
+const bcrypt = require('bcryptjs');
 const { query } = require('./db');
 
 const JWT_SECRET = process.env.JWT_SECRET || 'your-super-secret-key-change-in-production';
@@ -37,30 +38,35 @@ exports.handler = async (event, context) => {
     const { action, email, password, search } = event.queryStringParameters || {};
     const authHeader = event.headers.authorization;
 
-    // Health check endpoint
+    // Health check (matches PHP shape)
     if (action === 'health') {
       return {
         statusCode: 200,
         headers: corsHeaders(origin),
-        body: JSON.stringify({ data: { status: 'ok' } })
+        body: JSON.stringify({
+          status: 'ok',
+          service: 'Medsuite-eT Netlify API',
+          version: '2.0.0',
+          timestamp: new Date().toISOString(),
+        })
       };
     }
 
-    // Routes
-    if (action === 'login' && event.httpMethod === 'POST') {
+    // Auth + data routes (support legacy and frontend action names)
+    if ((action === 'auth_login' || action === 'login') && event.httpMethod === 'POST') {
       return await handleLogin(event, origin);
     }
-    
-    if (action === 'signup' && event.httpMethod === 'POST') {
+
+    if ((action === 'auth_signup' || action === 'signup') && event.httpMethod === 'POST') {
       return await handleSignup(event, origin);
     }
-    
+
+    if (action === 'auth_me' || action === 'user') {
+      return await handleGetUser(event, origin);
+    }
+
     if (action === 'products') {
       return await handleProducts(event, origin);
-    }
-    
-    if (action === 'user') {
-      return await handleGetUser(event, origin);
     }
 
     if (action === 'dashboard') {
@@ -92,7 +98,8 @@ async function handleLogin(event, origin) {
       bodyStr = Buffer.from(event.body, 'base64').toString('utf-8');
     }
     const body = JSON.parse(bodyStr);
-    const { email, password } = body;
+    const email = String(body.email || '').trim().toLowerCase();
+    const password = body.password;
 
     if (!email || !password) {
       return {
@@ -102,9 +109,8 @@ async function handleLogin(event, origin) {
       };
     }
 
-    // Query user
     const result = await query(
-      'SELECT id, email, password, role FROM users WHERE email = $1',
+      'SELECT id, email, password, role FROM users WHERE LOWER(email) = $1',
       [email]
     );
 
@@ -112,19 +118,28 @@ async function handleLogin(event, origin) {
       return {
         statusCode: 401,
         headers: corsHeaders(origin),
-        body: JSON.stringify({ error: 'Invalid credentials' })
+        body: JSON.stringify({ error: 'Invalid email or password' })
       };
     }
 
     const user = result.rows[0];
+    const stored = user.password || '';
+    const passwordOk =
+      stored.startsWith('$2a$') || stored.startsWith('$2b$')
+        ? await bcrypt.compare(password, stored)
+        : stored === password;
 
-    // Simple password check (in production, use bcrypt)
-    if (user.password !== password) {
+    if (!passwordOk) {
       return {
         statusCode: 401,
         headers: corsHeaders(origin),
-        body: JSON.stringify({ error: 'Invalid credentials' })
+        body: JSON.stringify({ error: 'Invalid email or password' })
       };
+    }
+
+    if (!stored.startsWith('$2')) {
+      const hash = await bcrypt.hash(password, 10);
+      await query('UPDATE users SET password = $1 WHERE id = $2', [hash, user.id]);
     }
 
     // Generate JWT
@@ -165,34 +180,32 @@ async function handleSignup(event, origin) {
       bodyStr = Buffer.from(event.body, 'base64').toString('utf-8');
     }
     const body = JSON.parse(bodyStr);
-    const { email, password } = body;
+    const email = String(body.email || '').trim().toLowerCase();
+    const password = body.password;
+    const fullName = String(body.full_name || body.fullName || '').trim();
 
-    if (!email || !password) {
+    if (!email || !password || password.length < 8) {
       return {
         statusCode: 400,
         headers: corsHeaders(origin),
-        body: JSON.stringify({ error: 'Email and password required' })
+        body: JSON.stringify({ error: 'Valid email and password (8+ chars) required' })
       };
     }
 
-    // Check if user exists
-    const existing = await query(
-      'SELECT id FROM users WHERE email = $1',
-      [email]
-    );
+    const existing = await query('SELECT id FROM users WHERE LOWER(email) = $1', [email]);
 
     if (existing.rows.length > 0) {
       return {
         statusCode: 409,
         headers: corsHeaders(origin),
-        body: JSON.stringify({ error: 'User already exists' })
+        body: JSON.stringify({ error: 'Email already registered' })
       };
     }
 
-    // Create user
+    const hash = await bcrypt.hash(password, 10);
     const result = await query(
       'INSERT INTO users (email, password, role) VALUES ($1, $2, $3) RETURNING id, email, role',
-      [email, password, 'customer']
+      [email, hash, 'customer']
     );
 
     const user = result.rows[0];
@@ -229,7 +242,9 @@ async function handleSignup(event, origin) {
 // Get products endpoint
 async function handleProducts(event, origin) {
   try {
-    const result = await query('SELECT * FROM products LIMIT 100');
+    const params = event.queryStringParameters || {};
+    const limit = Math.min(20000, Math.max(1, parseInt(params.limit, 10) || 10000));
+    const result = await query('SELECT * FROM products ORDER BY name ASC LIMIT $1', [limit]);
     
     return {
       statusCode: 200,

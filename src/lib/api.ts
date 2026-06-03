@@ -3,9 +3,15 @@
  * Supports both MySQL and PostgreSQL backends
  */
 
-// Use environment variable or default to Netlify functions
-const API_BASE = import.meta.env.VITE_API_BASE || 
-  (import.meta.env.VITE_API_URL || "/.netlify/functions/api");
+/** Resolve API base: prefer explicit env, then dev PHP proxy, then Netlify functions. */
+function resolveApiBase(): string {
+  if (import.meta.env.VITE_API_BASE) return import.meta.env.VITE_API_BASE;
+  if (import.meta.env.VITE_API_URL) return import.meta.env.VITE_API_URL;
+  if (import.meta.env.DEV) return "/api/index.php";
+  return "/.netlify/functions/api";
+}
+
+const API_BASE = resolveApiBase();
 
 // Alternative PostgreSQL endpoint (optional)
 export const POSTGRES_API_URL = import.meta.env.VITE_POSTGRES_API || null;
@@ -79,7 +85,10 @@ async function request<T>(
 }
 
 export const api = {
-  health: () => request<{ status: string }>("health"),
+  health: async () => {
+    const res = await request<{ status?: string; data?: { status?: string } }>("health");
+    return { status: res.status ?? res.data?.status ?? "unknown" };
+  },
 
   auth: {
     login: async (email: string, password: string) => {
@@ -109,21 +118,49 @@ export const api = {
       return res.data;
     },
     
-    loginWithBiometric: async (email: string, credential: any) => {
+    loginWithBiometric: async (email: string, credential: unknown) => {
       const res = await request<{
         data: {
           token: string;
           user: AppUser;
           roles: AppRole[];
+          approval_status?: string;
         };
       }>("auth_biometric", { method: "POST", body: { email, credential } });
       setToken(res.data.token);
       localStorage.setItem(AUTH_METHOD_KEY, "biometric");
       return res.data;
     },
-    
-    enrollBiometric: (credential: any) =>
-      request("auth_enroll_biometric", { method: "POST", body: { credential }, auth: true }),
+
+    biometricStatus: (email: string) =>
+      request<{ data: { enrolled: boolean; supported: boolean } }>("auth_biometric_status", {
+        query: { email: email.trim().toLowerCase() },
+      }).then((r) => r.data),
+
+    webauthnRegisterOptions: () =>
+      request<{ data: import("@/lib/webauthn").RegisterOptionsPayload }>(
+        "auth_webauthn_register_options",
+        { method: "POST", auth: true }
+      ).then((r) => r.data),
+
+    webauthnLoginOptions: (email: string) =>
+      request<{ data: import("@/lib/webauthn").LoginOptionsPayload }>(
+        "auth_webauthn_login_options",
+        { method: "POST", body: { email: email.trim().toLowerCase() } }
+      ).then((r) => r.data),
+
+    enrollBiometric: (credential: unknown) =>
+      request<{ data: { success: boolean; message: string } }>("auth_enroll_biometric", {
+        method: "POST",
+        body: { credential },
+        auth: true,
+      }),
+
+    removeBiometric: () =>
+      request<{ data: { success: boolean } }>("auth_biometric_remove", {
+        method: "POST",
+        auth: true,
+      }),
     
     setPIN: (currentPassword: string, newPin: string) =>
       request("auth_set_pin", { 
@@ -139,7 +176,7 @@ export const api = {
       }).then(r => r.data),
     
     signup: (full_name: string, email: string, password: string) =>
-      request<{ data: { message: string } }>("signup", {
+      request<{ data: { message: string } }>("auth_signup", {
         method: "POST",
         body: { full_name, email, password },
       }),
@@ -151,7 +188,7 @@ export const api = {
           profile: Record<string, unknown>;
           approval_status: string;
         };
-      }>("user"),
+      }>("auth_me", { auth: true }),
     updatePassword: (password: string) =>
       request("auth_password", { method: "POST", body: { password } }),
     logout: () => {
@@ -162,10 +199,14 @@ export const api = {
   },
 
   products: {
-    list: (query?: { category?: string; search?: string }) =>
-      request<{ data: Record<string, unknown>[] }>("products", { query: query as Record<string, string> }).then(
-        (r) => r.data
-      ),
+    list: (query?: { category?: string; search?: string; limit?: number }) =>
+      request<{ data: Record<string, unknown>[] }>("products", {
+        query: {
+          ...(query?.category ? { category: query.category } : {}),
+          ...(query?.search ? { search: query.search } : {}),
+          limit: String(query?.limit ?? 10000),
+        },
+      }).then((r) => r.data),
     get: (id: string) => request<{ data: Record<string, unknown> }>("product", { query: { id } }).then((r) => r.data),
     create: (payload: Record<string, unknown>) =>
       request("products", { method: "POST", body: payload }),

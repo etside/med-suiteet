@@ -72,10 +72,11 @@ function verify_token($pdo, ?string $token, string $secret): ?array
         return null;
     }
     
-    $userId = (int) $data['sub'];
+    $userId = (string) $data['sub'];
     $stmt = $pdo->prepare('SELECT id, email FROM users WHERE id = ?');
     $stmt->execute([$userId]);
-    return $stmt->fetch() ?: null;
+    $row = $stmt->fetch(PDO::FETCH_ASSOC);
+    return $row ?: null;
 }
 
 function current_user_id(PDO $pdo, array $config): ?string
@@ -84,7 +85,8 @@ function current_user_id(PDO $pdo, array $config): ?string
     if (!$token) {
         return null;
     }
-    return verify_token($token, $config['jwt_secret'] ?? 'change-me-in-config');
+    $user = verify_token($pdo, $token, $config['jwt_secret'] ?? 'change-me-in-config');
+    return $user ? (string) $user['id'] : null;
 }
 
 function user_roles(PDO $pdo, string $userId): array

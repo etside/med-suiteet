@@ -1,4 +1,3 @@
-import { useState, useEffect } from "react";
 import { Link, useLocation } from "react-router-dom";
 import {
   LayoutDashboard, Package, Warehouse, ShoppingCart, ClipboardList,
@@ -10,7 +9,8 @@ import { Button } from "@/components/ui/button";
 import { useLanguage } from "@/contexts/LanguageContext";
 import { useAuth } from "@/contexts/AuthContext";
 import { LanguageToggle } from "@/components/LanguageToggle";
-import { api } from "@/lib/api";
+import { isNavActive } from "@/lib/navActive";
+import { useShopEnabled } from "@/hooks/use-shop-enabled";
 import {
   Sidebar, SidebarContent, SidebarFooter, SidebarGroup, SidebarGroupContent,
   SidebarGroupLabel, SidebarHeader, SidebarMenu, SidebarMenuButton, SidebarMenuItem,
@@ -23,16 +23,10 @@ export function AppSidebar() {
   const { resolvedTheme, setTheme } = useTheme();
   const { t } = useLanguage();
   const { isStaff, isAdmin, signOut, user } = useAuth();
-  const [shopEnabled, setShopEnabled] = useState(false);
-
-  useEffect(() => {
-    api.settings.get().then((data) => {
-      setShopEnabled(!!data?.shop_enabled);
-    }).catch(() => setShopEnabled(false));
-  }, []);
+  const shopEnabled = useShopEnabled();
 
   const mainNav = isStaff ? [
-    { title: t("nav_dashboard"), icon: LayoutDashboard, href: "/" },
+    { title: t("nav_dashboard"), icon: LayoutDashboard, href: "/dashboard" },
     { title: t("nav_sales"), icon: ShoppingCart, href: "/sales" },
     { title: t("nav_products"), icon: Package, href: "/products" },
     { title: t("nav_manufacturers"), icon: Building2, href: "/manufacturers" },
@@ -62,8 +56,8 @@ export function AppSidebar() {
   return (
     <Sidebar>
       <SidebarHeader className="border-b border-sidebar-border p-4">
-        <Link to="/" className="flex items-center gap-2">
-          <img src="/logo.png" alt="Medsuite-eT" className="h-8 w-8 rounded-lg object-contain" />
+        <Link to="/dashboard" className="flex items-center gap-2">
+          <img src="/logo.svg" alt="Medsuite-eT" className="h-8 w-8 rounded-lg object-contain" />
           <div>
             <h1 className="text-base font-bold text-sidebar-foreground">{t("app_name")}</h1>
             <p className="text-[10px] text-muted-foreground">{t("app_tagline")}</p>
@@ -79,7 +73,11 @@ export function AppSidebar() {
               <SidebarMenu>
                 {mainNav.map((item) => (
                   <SidebarMenuItem key={item.href}>
-                    <SidebarMenuButton asChild isActive={location.pathname === item.href}>
+                    <SidebarMenuButton
+                      asChild
+                      isActive={isNavActive(location.pathname, item.href)}
+                      className="data-[active=true]:border-l-2 data-[active=true]:border-sidebar-primary data-[active=true]:bg-sidebar-primary/10 data-[active=true]:text-sidebar-primary dark:data-[active=true]:bg-sidebar-primary/20"
+                    >
                       <Link to={item.href}><item.icon className="h-4 w-4" /><span>{item.title}</span></Link>
                     </SidebarMenuButton>
                   </SidebarMenuItem>
@@ -96,7 +94,11 @@ export function AppSidebar() {
               <SidebarMenu>
                 {customerNav.map((item) => (
                   <SidebarMenuItem key={item.href}>
-                    <SidebarMenuButton asChild isActive={location.pathname === item.href}>
+                    <SidebarMenuButton
+                      asChild
+                      isActive={isNavActive(location.pathname, item.href)}
+                      className="data-[active=true]:border-l-2 data-[active=true]:border-sidebar-primary data-[active=true]:bg-sidebar-primary/10 data-[active=true]:text-sidebar-primary dark:data-[active=true]:bg-sidebar-primary/20"
+                    >
                       <Link to={item.href}><item.icon className="h-4 w-4" /><span>{item.title}</span></Link>
                     </SidebarMenuButton>
                   </SidebarMenuItem>
@@ -113,7 +115,11 @@ export function AppSidebar() {
               <SidebarMenu>
                 {adminNav.map((item) => (
                   <SidebarMenuItem key={item.href}>
-                    <SidebarMenuButton asChild isActive={location.pathname === item.href}>
+                    <SidebarMenuButton
+                      asChild
+                      isActive={isNavActive(location.pathname, item.href)}
+                      className="data-[active=true]:border-l-2 data-[active=true]:border-sidebar-primary data-[active=true]:bg-sidebar-primary/10 data-[active=true]:text-sidebar-primary dark:data-[active=true]:bg-sidebar-primary/20"
+                    >
                       <Link to={item.href}><item.icon className="h-4 w-4" /><span>{item.title}</span></Link>
                     </SidebarMenuButton>
                   </SidebarMenuItem>

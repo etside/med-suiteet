@@ -29,7 +29,7 @@ const Auth = () => {
       await api.auth.login(loginEmail, loginPassword);
       await refresh();
       toast.success("Logged in successfully!");
-      navigate("/");
+      navigate("/dashboard");
     } catch (e) {
       toast.error(e instanceof ApiError ? e.message : "Login failed");
     } finally {

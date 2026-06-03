@@ -9,7 +9,7 @@ export function AnimatedOutlet() {
 
   return (
     <AnimatePresence mode="wait" initial={false}>
-      <PageTransition key={location.pathname}>{outlet}</PageTransition>
+      <PageTransition key={location.key}>{outlet}</PageTransition>
     </AnimatePresence>
   );
 }

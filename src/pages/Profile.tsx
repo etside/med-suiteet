@@ -9,6 +9,7 @@ import { api } from "@/lib/api";
 import { useAuth } from "@/contexts/AuthContext";
 import { toast } from "sonner";
 import { WebAuthnSetup } from "@/components/WebAuthnSetup";
+import { NotificationPreferences } from "@/components/NotificationPreferences";
 
 const Profile = () => {
   const { user, roles, isAdmin, isSuperAdmin } = useAuth();
@@ -98,6 +99,8 @@ const Profile = () => {
           </Button>
         </CardContent>
       </Card>
+
+      <NotificationPreferences />
 
       {/* WebAuthn biometric setup - only for admin/super_admin */}
       {(isAdmin || isSuperAdmin) && <WebAuthnSetup />}

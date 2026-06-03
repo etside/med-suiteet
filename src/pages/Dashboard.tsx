@@ -1,11 +1,12 @@
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { motion } from "framer-motion";
 import {
   Package, ShoppingCart, TrendingUp, AlertTriangle, DollarSign, Clock,
   BarChart3, FileText, Settings, Users, QrCode, ClipboardList, Bell, User,
-  Shield, BookUser, MessageCircle, Warehouse,
+  Shield, BookUser, MessageCircle, Warehouse, Building2,
 } from "lucide-react";
+import { Skeleton } from "@/components/ui/skeleton";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import {
@@ -22,6 +23,7 @@ const WHATSAPP_HELP = "https://wa.me/8801873722228?text=Hi%2C%20I%20need%20help%
 const NAV_TILES = [
   { titleKey: "nav_sales", icon: ShoppingCart, path: "/sales", color: "bg-emerald-500/15 text-emerald-500" },
   { titleKey: "nav_products", icon: Package, path: "/products", color: "bg-blue-500/15 text-blue-500" },
+  { titleKey: "nav_manufacturers", icon: Building2, path: "/manufacturers", color: "bg-teal-500/15 text-teal-500" },
   { titleKey: "nav_inventory", icon: Warehouse, path: "/inventory", color: "bg-amber-500/15 text-amber-500" },
   { titleKey: "nav_purchases", icon: ClipboardList, path: "/purchases", color: "bg-violet-500/15 text-violet-500" },
   { titleKey: "nav_reports", icon: BarChart3, path: "/reports", color: "bg-pink-500/15 text-pink-500" },
@@ -48,9 +50,16 @@ const Dashboard = () => {
   const [monthlyRevenue, setMonthlyRevenue] = useState(0);
   const [expiringCount, setExpiringCount] = useState(0);
   const [weeklySales, setWeeklySales] = useState<{ day: string; sales: number }[]>([]);
+  const [statsLoading, setStatsLoading] = useState(true);
 
   useEffect(() => {
+    if (!isStaff) {
+      setStatsLoading(false);
+      return;
+    }
+    let cancelled = false;
     const fetchStats = async () => {
+      setStatsLoading(true);
       try {
         const stats = await api.dashboard();
         setProductCount(stats.product_count);
@@ -79,9 +88,14 @@ const Dashboard = () => {
         setWeeklySales(labels.map((day) => ({ day, sales: byDay[day] ?? 0 })));
       } catch {
         /* ignore */
+      } finally {
+        if (!cancelled) setStatsLoading(false);
       }
     };
-    if (isStaff) fetchStats();
+    fetchStats();
+    return () => {
+      cancelled = true;
+    };
   }, [isStaff]);
 
   useEffect(() => {
@@ -90,6 +104,23 @@ const Dashboard = () => {
       setShowOnboarding(true);
     }
   }, [isStaff]);
+
+  const kpis = useMemo(
+    () => [
+      { title: t("dash_total_products"), value: String(productCount), icon: Package, color: "text-blue-500", path: "/inventory" },
+      { title: t("dash_low_stock"), value: String(lowStockCount), icon: AlertTriangle, color: "text-amber-500", path: "/inventory" },
+      { title: t("dash_today_sales"), value: "৳" + todaySales.toLocaleString(), icon: DollarSign, color: "text-emerald-500", path: "/sales" },
+      { title: t("dash_monthly_revenue"), value: "৳" + monthlyRevenue.toLocaleString(), icon: TrendingUp, color: "text-violet-500", path: "/reports" },
+      { title: t("dash_pending_orders"), value: String(pendingOrders), icon: ClipboardList, color: "text-amber-500", path: "/admin/orders" },
+      { title: t("dash_expiring_soon"), value: String(expiringCount), icon: Clock, color: "text-destructive", path: "/inventory" },
+    ],
+    [t, productCount, lowStockCount, todaySales, monthlyRevenue, pendingOrders, expiringCount],
+  );
+
+  const visibleTiles = useMemo(
+    () => NAV_TILES.filter((tile) => !("adminOnly" in tile && tile.adminOnly) || isAdmin),
+    [isAdmin],
+  );
 
   if (!isStaff) {
     return (
@@ -121,17 +152,6 @@ const Dashboard = () => {
       </div>
     );
   }
-
-  const kpis = [
-    { title: t("dash_total_products"), value: String(productCount), icon: Package, color: "text-blue-500", path: "/inventory" },
-    { title: t("dash_low_stock"), value: String(lowStockCount), icon: AlertTriangle, color: "text-amber-500", path: "/inventory" },
-    { title: t("dash_today_sales"), value: "৳" + todaySales.toLocaleString(), icon: DollarSign, color: "text-emerald-500", path: "/sales" },
-    { title: t("dash_monthly_revenue"), value: "৳" + monthlyRevenue.toLocaleString(), icon: TrendingUp, color: "text-violet-500", path: "/reports" },
-    { title: t("dash_pending_orders"), value: String(pendingOrders), icon: ClipboardList, color: "text-amber-500", path: "/admin/orders" },
-    { title: t("dash_expiring_soon"), value: String(expiringCount), icon: Clock, color: "text-destructive", path: "/inventory" },
-  ];
-
-  const visibleTiles = NAV_TILES.filter((tile) => !("adminOnly" in tile && tile.adminOnly) || isAdmin);
 
   return (
     <motion.div className="space-y-5 sm:space-y-6" variants={containerVariants} initial="hidden" animate="visible">
@@ -165,21 +185,30 @@ const Dashboard = () => {
       </motion.div>
 
       <motion.div variants={itemVariants} className="grid gap-3 grid-cols-2 md:grid-cols-3 lg:grid-cols-6">
-        {kpis.map((kpi) => (
-          <Card
-            key={kpi.title}
-            className="card-interactive cursor-pointer"
-            onClick={() => navigate(kpi.path)}
-          >
-            <CardContent className="p-3 sm:p-4 space-y-2">
-              <div className="flex items-center justify-between gap-2">
-                <p className="text-[10px] sm:text-xs text-muted-foreground leading-tight">{kpi.title}</p>
-                <kpi.icon className={`h-4 w-4 shrink-0 ${kpi.color}`} />
-              </div>
-              <p className="text-lg sm:text-xl font-bold truncate">{kpi.value}</p>
-            </CardContent>
-          </Card>
-        ))}
+        {statsLoading
+          ? Array.from({ length: 6 }).map((_, i) => (
+              <Card key={i} className="overflow-hidden">
+                <CardContent className="p-3 sm:p-4 space-y-3">
+                  <Skeleton className="h-3 w-2/3" />
+                  <Skeleton className="h-7 w-1/2" />
+                </CardContent>
+              </Card>
+            ))
+          : kpis.map((kpi) => (
+              <Card
+                key={kpi.title}
+                className="card-interactive cursor-pointer"
+                onClick={() => navigate(kpi.path)}
+              >
+                <CardContent className="p-3 sm:p-4 space-y-2">
+                  <div className="flex items-center justify-between gap-2">
+                    <p className="text-[10px] sm:text-xs text-muted-foreground leading-tight">{kpi.title}</p>
+                    <kpi.icon className={`h-4 w-4 shrink-0 ${kpi.color}`} />
+                  </div>
+                  <p className="text-lg sm:text-xl font-bold truncate">{kpi.value}</p>
+                </CardContent>
+              </Card>
+            ))}
       </motion.div>
 
       <motion.div variants={itemVariants} className="grid gap-3 sm:gap-4 lg:grid-cols-2">
@@ -189,7 +218,11 @@ const Dashboard = () => {
             <CardDescription className="text-xs">{t("dash_revenue_trend")}</CardDescription>
           </CardHeader>
           <CardContent className="p-3 pt-0 sm:p-6 sm:pt-0">
-            {weeklySales.every((d) => d.sales === 0) ? (
+            {statsLoading ? (
+              <div className="space-y-3 py-4">
+                <Skeleton className="h-[220px] w-full rounded-lg" />
+              </div>
+            ) : weeklySales.every((d) => d.sales === 0) ? (
               <p className="text-center text-muted-foreground py-12 text-sm">{t("dash_no_sales")}</p>
             ) : (
               <ResponsiveContainer width="100%" height={220}>
@@ -221,7 +254,13 @@ const Dashboard = () => {
             <CardDescription className="text-xs">{t("dash_most_sold")}</CardDescription>
           </CardHeader>
           <CardContent className="p-3 pt-0 sm:p-6 sm:pt-0">
-            {topSelling.length === 0 ? (
+            {statsLoading ? (
+              <div className="space-y-2 py-2">
+                {Array.from({ length: 5 }).map((_, i) => (
+                  <Skeleton key={i} className="h-10 w-full rounded-lg" />
+                ))}
+              </div>
+            ) : topSelling.length === 0 ? (
               <p className="text-center text-muted-foreground py-12 text-sm">{t("no_results")}</p>
             ) : (
               <ul className="space-y-2">

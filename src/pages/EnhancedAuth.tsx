@@ -7,37 +7,58 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { useAuth } from "@/contexts/AuthContext";
+import { api, ApiError } from "@/lib/api";
+import { features } from "@/config/features";
+import { getPlatformAssertion, isWebAuthnSupported } from "@/lib/webauthn";
 import { Fingerprint, Lock, Eye, EyeOff, Loader2, ArrowLeft } from "lucide-react";
 
 const EnhancedAuth = () => {
   const navigate = useNavigate();
   const { signIn } = useAuth();
   const [authMode, setAuthMode] = useState<"password" | "pin" | "biometric">("password");
-  const [email, setEmail] = useState("admin@eMed.com");
-  const [password, setPassword] = useState("Pjokjict4");
+  const [email, setEmail] = useState("");
+  const [password, setPassword] = useState("");
   const [pin, setPin] = useState("");
   const [showPassword, setShowPassword] = useState(false);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
   const [supportsBiometric, setSupportsBiometric] = useState(false);
+  const [biometricEnrolled, setBiometricEnrolled] = useState<boolean | null>(null);
 
-  // Check WebAuthn support
+  const tabCount = 1 + (features.pinAuth ? 1 : 0) + (supportsBiometric ? 1 : 0);
+
   useEffect(() => {
-    setSupportsBiometric(
-      window.PublicKeyCredential !== undefined &&
-      navigator.credentials !== undefined
-    );
+    setSupportsBiometric(isWebAuthnSupported());
   }, []);
+
+  useEffect(() => {
+    if (!supportsBiometric || !email.trim()) {
+      setBiometricEnrolled(null);
+      return;
+    }
+    let cancelled = false;
+    api.auth
+      .biometricStatus(email)
+      .then((s) => {
+        if (!cancelled) setBiometricEnrolled(s.enrolled);
+      })
+      .catch(() => {
+        if (!cancelled) setBiometricEnrolled(false);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [email, supportsBiometric]);
 
   const handlePasswordLogin = async (e: React.FormEvent) => {
     e.preventDefault();
     setLoading(true);
     setError("");
     try {
-      await signIn(email, password);
-      navigate("/");
+      await signIn(email, password, { method: "password" });
+      navigate("/dashboard");
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Login failed");
+      setError(err instanceof ApiError ? err.message : err instanceof Error ? err.message : "Login failed");
     } finally {
       setLoading(false);
     }
@@ -52,11 +73,10 @@ const EnhancedAuth = () => {
     setLoading(true);
     setError("");
     try {
-      // PIN login would validate against backend
-      await signIn(email, pin);
-      navigate("/");
+      await signIn(email, pin, { method: "pin" });
+      navigate("/dashboard");
     } catch (err) {
-      setError(err instanceof Error ? err.message : "PIN authentication failed");
+      setError(err instanceof ApiError ? err.message : err instanceof Error ? err.message : "PIN authentication failed");
     } finally {
       setLoading(false);
     }
@@ -64,20 +84,30 @@ const EnhancedAuth = () => {
 
   const handleBiometricLogin = async () => {
     if (!supportsBiometric) {
-      setError("Biometric authentication not supported on this device");
+      setError("Biometric login requires HTTPS (or localhost) and a supported device");
+      return;
+    }
+    if (!email.trim()) {
+      setError("Enter your email first");
       return;
     }
 
     setLoading(true);
     setError("");
     try {
-      // Simulate biometric authentication
-      // In production, would use WebAuthn API
-      await new Promise((resolve) => setTimeout(resolve, 2000));
-      await signIn("admin@eMed.com", "");
-      navigate("/");
+      const loginOptions = await api.auth.webauthnLoginOptions(email);
+      const credential = await getPlatformAssertion(loginOptions);
+      await signIn(email, "", { method: "biometric", credential });
+      navigate("/dashboard");
     } catch (err) {
-      setError("Biometric authentication failed");
+      const msg =
+        err instanceof ApiError
+          ? err.message
+          : err instanceof Error
+            ? err.message
+            : "Biometric authentication failed";
+      setError(msg);
+      if (import.meta.env.DEV) console.error("[Biometric login]", err);
     } finally {
       setLoading(false);
     }
@@ -112,58 +142,74 @@ const EnhancedAuth = () => {
           Back to Home
         </Button>
 
-        <Card className="border-slate-700 bg-slate-800/50 backdrop-blur-md">
+        <Card className="border-slate-600 bg-slate-800/90 backdrop-blur-md text-slate-100 shadow-xl">
           <CardHeader className="space-y-2">
             <div className="flex items-center gap-2">
               <div className="h-10 w-10 bg-gradient-to-br from-emerald-500 to-cyan-600 rounded-lg flex items-center justify-center">
                 <span className="text-white font-bold">MS</span>
               </div>
               <div>
-                <CardTitle>Medsuite-eT</CardTitle>
-                <CardDescription>Pharmacy Management</CardDescription>
+                <CardTitle className="text-white">Medsuite-eT</CardTitle>
+                <CardDescription className="text-slate-300">Pharmacy Management</CardDescription>
               </div>
             </div>
           </CardHeader>
 
           <CardContent>
-            <Tabs value={authMode} onValueChange={(value) => setAuthMode(value as any)} className="w-full">
-              <TabsList className="grid w-full grid-cols-3 mb-6">
-                <TabsTrigger value="password" className="text-xs sm:text-sm">
+            <Tabs value={authMode} onValueChange={(value) => setAuthMode(value as "password" | "pin" | "biometric")} className="w-full">
+              <TabsList
+                className={`grid w-full mb-6 bg-slate-700/80 border border-slate-600 grid-cols-${tabCount}`}
+                style={{ gridTemplateColumns: `repeat(${tabCount}, minmax(0, 1fr))` }}
+              >
+                <TabsTrigger
+                  value="password"
+                  className="text-xs sm:text-sm text-slate-300 data-[state=active]:bg-slate-600 data-[state=active]:text-white"
+                >
                   <Lock className="h-4 w-4 mr-2" />
                   <span className="hidden sm:inline">Password</span>
                 </TabsTrigger>
-                <TabsTrigger value="pin" className="text-xs sm:text-sm">
-                  🔐
-                  <span className="hidden sm:inline">PIN</span>
-                </TabsTrigger>
-                <TabsTrigger
-                  value="biometric"
-                  disabled={!supportsBiometric}
-                  className="text-xs sm:text-sm"
-                >
-                  <Fingerprint className="h-4 w-4 mr-2" />
-                  <span className="hidden sm:inline">Biometric</span>
-                </TabsTrigger>
+                {features.pinAuth && (
+                  <TabsTrigger
+                    value="pin"
+                    className="text-xs sm:text-sm text-slate-300 data-[state=active]:bg-slate-600 data-[state=active]:text-white"
+                  >
+                    🔐
+                    <span className="hidden sm:inline">PIN</span>
+                  </TabsTrigger>
+                )}
+                {supportsBiometric && (
+                  <TabsTrigger
+                    value="biometric"
+                    className="text-xs sm:text-sm text-slate-300 data-[state=active]:bg-slate-600 data-[state=active]:text-white"
+                  >
+                    <Fingerprint className="h-4 w-4 mr-2" />
+                    <span className="hidden sm:inline">Biometric</span>
+                  </TabsTrigger>
+                )}
               </TabsList>
 
               {/* Password Tab */}
               <TabsContent value="password" className="space-y-4">
                 <form onSubmit={handlePasswordLogin} className="space-y-4">
                   <div className="space-y-2">
-                    <Label htmlFor="email">Email</Label>
+                    <Label htmlFor="email" className="text-slate-200">
+                      Email
+                    </Label>
                     <Input
                       id="email"
                       type="email"
                       placeholder="admin@eMed.com"
                       value={email}
                       onChange={(e) => setEmail(e.target.value)}
-                      className="bg-slate-700/50 border-slate-600"
+                      className="bg-slate-700/80 border-slate-500 text-white placeholder:text-slate-400"
                       disabled={loading}
                     />
                   </div>
 
                   <div className="space-y-2">
-                    <Label htmlFor="password">Password</Label>
+                    <Label htmlFor="password" className="text-slate-200">
+                      Password
+                    </Label>
                     <div className="relative">
                       <Input
                         id="password"
@@ -171,7 +217,7 @@ const EnhancedAuth = () => {
                         placeholder="Enter your password"
                         value={password}
                         onChange={(e) => setPassword(e.target.value)}
-                        className="bg-slate-700/50 border-slate-600 pr-10"
+                        className="bg-slate-700/80 border-slate-500 text-white placeholder:text-slate-400 pr-10"
                         disabled={loading}
                       />
                       <button
@@ -222,12 +268,14 @@ const EnhancedAuth = () => {
                 </p>
                 <form onSubmit={handlePINLogin} className="space-y-4">
                   <div className="space-y-2">
-                    <Label htmlFor="pin">PIN</Label>
+                    <Label htmlFor="pin" className="text-slate-200">
+                      PIN
+                    </Label>
                     <div className="flex gap-2 justify-center mb-6">
                       {[0, 1, 2, 3].map((index) => (
                         <div
                           key={index}
-                          className="h-12 w-12 bg-slate-700/50 border border-slate-600 rounded-lg flex items-center justify-center text-xl font-bold"
+                          className="h-12 w-12 bg-slate-700/80 border border-slate-500 rounded-lg flex items-center justify-center text-xl font-bold text-white"
                         >
                           {pin.length > index ? "•" : ""}
                         </div>
@@ -254,7 +302,7 @@ const EnhancedAuth = () => {
                         key={num}
                         type="button"
                         onClick={() => pin.length < 4 && setPin(pin + num)}
-                        className="bg-slate-700/50 hover:bg-slate-600 border border-slate-600 rounded-lg py-3 font-semibold transition-colors"
+                        className="bg-slate-700/80 hover:bg-slate-600 border border-slate-500 rounded-lg py-3 font-semibold text-white transition-colors"
                       >
                         {num}
                       </button>
@@ -262,14 +310,14 @@ const EnhancedAuth = () => {
                     <button
                       type="button"
                       onClick={() => pin.length < 4 && setPin(pin + "0")}
-                      className="col-span-2 bg-slate-700/50 hover:bg-slate-600 border border-slate-600 rounded-lg py-3 font-semibold transition-colors"
+                      className="col-span-2 bg-slate-700/80 hover:bg-slate-600 border border-slate-500 rounded-lg py-3 font-semibold text-white transition-colors"
                     >
                       0
                     </button>
                     <button
                       type="button"
                       onClick={() => setPin(pin.slice(0, -1))}
-                      className="bg-slate-700/50 hover:bg-slate-600 border border-slate-600 rounded-lg py-3 font-semibold transition-colors"
+                      className="bg-slate-700/80 hover:bg-slate-600 border border-slate-500 rounded-lg py-3 font-semibold text-white transition-colors"
                     >
                       ⌫
                     </button>
@@ -303,8 +351,23 @@ const EnhancedAuth = () => {
               </TabsContent>
 
               {/* Biometric Tab */}
+              {supportsBiometric && (
               <TabsContent value="biometric" className="space-y-4">
                 <div className="text-center space-y-4">
+                  <div className="space-y-2 text-left">
+                    <Label htmlFor="bio-email" className="text-slate-200">
+                      Admin email
+                    </Label>
+                    <Input
+                      id="bio-email"
+                      type="email"
+                      placeholder="you@pharmacy.com"
+                      value={email}
+                      onChange={(e) => setEmail(e.target.value)}
+                      className="bg-slate-700/80 border-slate-500 text-white placeholder:text-slate-400"
+                      disabled={loading}
+                    />
+                  </div>
                   <div className="flex justify-center">
                     <motion.div
                       animate={{ scale: [1, 1.1, 1] }}
@@ -314,8 +377,12 @@ const EnhancedAuth = () => {
                       <Fingerprint className="h-10 w-10 text-white" />
                     </motion.div>
                   </div>
-                  <p className="text-slate-400">
-                    Place your finger on the sensor or look at the camera
+                  <p className="text-slate-400 text-sm">
+                    {biometricEnrolled === false
+                      ? "Enable biometric in Profile → Biometric Authentication after signing in with password."
+                      : biometricEnrolled === true
+                        ? "Use fingerprint or Face ID for this admin account."
+                        : "Checking enrollment…"}
                   </p>
 
                   {error && (
@@ -331,7 +398,7 @@ const EnhancedAuth = () => {
                   <Button
                     onClick={handleBiometricLogin}
                     className="w-full bg-gradient-to-r from-emerald-600 to-cyan-600 hover:from-emerald-700 hover:to-cyan-700"
-                    disabled={loading}
+                    disabled={loading || !email.trim() || biometricEnrolled === false}
                   >
                     {loading ? (
                       <>
@@ -355,11 +422,8 @@ const EnhancedAuth = () => {
                   </Button>
                 </div>
               </TabsContent>
+              )}
             </Tabs>
-
-            <div className="mt-6 pt-6 border-t border-slate-700 text-center text-sm text-slate-400">
-              Demo credentials: admin@eMed.com / Pjokjict4
-            </div>
           </CardContent>
         </Card>
       </motion.div>

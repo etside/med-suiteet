@@ -16,6 +16,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'OPTIONS') {
 }
 
 require __DIR__ . '/inc/helpers.php';
+require __DIR__ . '/inc/webauthn.php';
 
 $configPath = __DIR__ . '/config.php';
 if (!file_exists($configPath)) {
@@ -134,6 +135,178 @@ try {
                 ],
             ]);
 
+        case 'auth_biometric_status':
+            webauthn_require_columns($pdo);
+            $email = strtolower(trim($_GET['email'] ?? ''));
+            if ($email === '') {
+                api_error('Email required');
+            }
+            $stmt = $pdo->prepare('SELECT biometric_enrolled FROM users WHERE email = ? LIMIT 1');
+            $stmt->execute([$email]);
+            $row = $stmt->fetch();
+            api_json([
+                'data' => [
+                    'enrolled' => $row && !empty($row['biometric_enrolled']),
+                    'supported' => true,
+                ],
+            ]);
+
+        case 'auth_webauthn_register_options':
+            if ($method !== 'POST') {
+                api_error('POST required', 405);
+            }
+            webauthn_require_columns($pdo);
+            $userId = require_auth($pdo, $config);
+            require_roles($pdo, $userId, ['admin', 'super_admin']);
+            $stmt = $pdo->prepare('SELECT u.id, u.email, p.full_name FROM users u LEFT JOIN profiles p ON p.user_id = u.id WHERE u.id = ?');
+            $stmt->execute([$userId]);
+            $user = $stmt->fetch();
+            if (!$user) {
+                api_error('User not found', 404);
+            }
+            $challenge = webauthn_new_challenge();
+            webauthn_store_challenge($pdo, $userId, $challenge);
+            $rpId = webauthn_rp_id();
+            api_json([
+                'data' => [
+                    'rp' => ['name' => 'Medsuite-eT', 'id' => $rpId],
+                    'user' => [
+                        'id' => webauthn_b64url_encode((string) $user['id']),
+                        'name' => $user['email'],
+                        'displayName' => $user['full_name'] ?? $user['email'],
+                    ],
+                    'challenge' => $challenge,
+                    'pubKeyCredParams' => [
+                        ['type' => 'public-key', 'alg' => -7],
+                        ['type' => 'public-key', 'alg' => -257],
+                    ],
+                    'timeout' => 60000,
+                    'attestation' => 'none',
+                    'authenticatorSelection' => [
+                        'authenticatorAttachment' => 'platform',
+                        'residentKey' => 'preferred',
+                        'userVerification' => 'required',
+                    ],
+                ],
+            ]);
+
+        case 'auth_enroll_biometric':
+            if ($method !== 'POST') {
+                api_error('POST required', 405);
+            }
+            webauthn_require_columns($pdo);
+            $userId = require_auth($pdo, $config);
+            require_roles($pdo, $userId, ['admin', 'super_admin']);
+            $body = api_body();
+            $credential = $body['credential'] ?? null;
+            if (!is_array($credential) || empty($credential['id'])) {
+                api_error('Invalid credential payload');
+            }
+            $clientData = webauthn_parse_client_data($credential['response']['clientDataJSON'] ?? null);
+            if (($clientData['type'] ?? '') !== 'webauthn.create') {
+                api_error('Invalid registration ceremony', 400);
+            }
+            $challenge = $clientData['challenge'] ?? '';
+            if (!webauthn_verify_challenge($pdo, $userId, $challenge)) {
+                api_error('Registration challenge expired or invalid', 401);
+            }
+            $store = [
+                'credentialId' => $credential['id'],
+                'rawId' => $credential['rawId'] ?? $credential['id'],
+                'enrolledAt' => date('c'),
+            ];
+            $pdo->prepare(
+                'UPDATE users SET biometric_enrolled = 1, biometric_data = ? WHERE id = ?'
+            )->execute([json_encode($store, JSON_UNESCAPED_UNICODE), $userId]);
+            api_json(['data' => ['success' => true, 'message' => 'Biometric enrolled']]);
+
+        case 'auth_webauthn_login_options':
+            if ($method !== 'POST') {
+                api_error('POST required', 405);
+            }
+            webauthn_require_columns($pdo);
+            $body = api_body();
+            $email = strtolower(trim($body['email'] ?? ''));
+            if ($email === '') {
+                api_error('Email required');
+            }
+            $stmt = $pdo->prepare(
+                'SELECT id, email, biometric_enrolled, biometric_data FROM users WHERE email = ? LIMIT 1'
+            );
+            $stmt->execute([$email]);
+            $user = $stmt->fetch();
+            if (!$user || empty($user['biometric_enrolled'])) {
+                api_error('Biometric not enrolled for this account', 404);
+            }
+            $stored = json_decode($user['biometric_data'] ?? '{}', true);
+            $credId = $stored['credentialId'] ?? '';
+            if ($credId === '') {
+                api_error('Biometric credential missing', 404);
+            }
+            $challenge = webauthn_new_challenge();
+            webauthn_store_challenge($pdo, (string) $user['id'], $challenge);
+            $rpId = webauthn_rp_id();
+            api_json([
+                'data' => [
+                    'challenge' => $challenge,
+                    'timeout' => 60000,
+                    'rpId' => $rpId,
+                    'allowCredentials' => [
+                        [
+                            'type' => 'public-key',
+                            'id' => $credId,
+                            'transports' => ['internal', 'hybrid'],
+                        ],
+                    ],
+                    'userVerification' => 'required',
+                ],
+            ]);
+
+        case 'auth_biometric':
+            if ($method !== 'POST') {
+                api_error('POST required', 405);
+            }
+            webauthn_require_columns($pdo);
+            $body = api_body();
+            $email = strtolower(trim($body['email'] ?? ''));
+            $credential = $body['credential'] ?? null;
+            if ($email === '' || !is_array($credential) || empty($credential['id'])) {
+                api_error('Email and credential required');
+            }
+            $stmt = $pdo->prepare(
+                'SELECT id, email, biometric_enrolled, biometric_data FROM users WHERE email = ? LIMIT 1'
+            );
+            $stmt->execute([$email]);
+            $user = $stmt->fetch();
+            if (!$user || empty($user['biometric_enrolled'])) {
+                api_error('Biometric not enrolled', 401);
+            }
+            $stored = json_decode($user['biometric_data'] ?? '{}', true);
+            $expectedId = $stored['credentialId'] ?? '';
+            if ($expectedId === '' || !hash_equals($expectedId, (string) $credential['id'])) {
+                api_error('Unknown biometric credential', 401);
+            }
+            $clientData = webauthn_parse_client_data($credential['response']['clientDataJSON'] ?? null);
+            if (($clientData['type'] ?? '') !== 'webauthn.get') {
+                api_error('Invalid authentication ceremony', 400);
+            }
+            $challenge = $clientData['challenge'] ?? '';
+            if (!webauthn_verify_challenge($pdo, (string) $user['id'], $challenge)) {
+                api_error('Authentication challenge expired or invalid', 401);
+            }
+            webauthn_issue_session($pdo, $config, $user);
+
+        case 'auth_biometric_remove':
+            if ($method !== 'POST') {
+                api_error('POST required', 405);
+            }
+            webauthn_require_columns($pdo);
+            $userId = require_auth($pdo, $config);
+            $pdo->prepare(
+                'UPDATE users SET biometric_enrolled = 0, biometric_data = NULL, webauthn_challenge = NULL, webauthn_challenge_expires = NULL WHERE id = ?'
+            )->execute([$userId]);
+            api_json(['data' => ['success' => true]]);
+
         case 'auth_password':
             if ($method !== 'POST') {
                 api_error('POST required', 405);
@@ -164,7 +337,8 @@ try {
                     $params[] = "%$search%";
                     $params[] = "%$search%";
                 }
-                $sql .= ' ORDER BY name ASC LIMIT 1000';
+                $limit = min(20000, max(1, (int) ($_GET['limit'] ?? 10000)));
+                $sql .= ' ORDER BY name ASC LIMIT ' . $limit;
                 $stmt = $pdo->prepare($sql);
                 $stmt->execute($params);
                 api_json(['data' => $stmt->fetchAll()]);
@@ -174,25 +348,49 @@ try {
                 require_roles($pdo, $userId, ['staff', 'admin', 'super_admin']);
                 $b = api_body();
                 $id = uuid();
-                $pdo->prepare(
-                    'INSERT INTO products (id, name, name_bn, generic_name, category, price, stock, min_stock, batch_number, expiry_date, requires_prescription, description, description_bn, image_url)
-                     VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?)'
-                )->execute([
-                    $id,
-                    $b['name'] ?? '',
-                    $b['name_bn'] ?? null,
-                    $b['generic_name'] ?? null,
-                    $b['category'] ?? null,
-                    $b['price'] ?? 0,
-                    $b['stock'] ?? 0,
-                    $b['min_stock'] ?? 10,
-                    $b['batch_number'] ?? null,
-                    $b['expiry_date'] ?? null,
-                    !empty($b['requires_prescription']) ? 1 : 0,
-                    $b['description'] ?? null,
-                    $b['description_bn'] ?? null,
-                    $b['image_url'] ?? null,
-                ]);
+                $hasMfr = (bool) $pdo->query("SHOW COLUMNS FROM products LIKE 'manufacturer'")->fetch();
+                if ($hasMfr) {
+                    $pdo->prepare(
+                        'INSERT INTO products (id, name, name_bn, generic_name, manufacturer, category, price, stock, min_stock, batch_number, expiry_date, requires_prescription, description, description_bn, image_url)
+                         VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)'
+                    )->execute([
+                        $id,
+                        $b['name'] ?? '',
+                        $b['name_bn'] ?? null,
+                        $b['generic_name'] ?? null,
+                        $b['manufacturer'] ?? null,
+                        $b['category'] ?? null,
+                        $b['price'] ?? 0,
+                        $b['stock'] ?? 0,
+                        $b['min_stock'] ?? 10,
+                        $b['batch_number'] ?? null,
+                        $b['expiry_date'] ?? null,
+                        !empty($b['requires_prescription']) ? 1 : 0,
+                        $b['description'] ?? null,
+                        $b['description_bn'] ?? null,
+                        $b['image_url'] ?? null,
+                    ]);
+                } else {
+                    $pdo->prepare(
+                        'INSERT INTO products (id, name, name_bn, generic_name, category, price, stock, min_stock, batch_number, expiry_date, requires_prescription, description, description_bn, image_url)
+                         VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?)'
+                    )->execute([
+                        $id,
+                        $b['name'] ?? '',
+                        $b['name_bn'] ?? null,
+                        $b['generic_name'] ?? null,
+                        $b['category'] ?? null,
+                        $b['price'] ?? 0,
+                        $b['stock'] ?? 0,
+                        $b['min_stock'] ?? 10,
+                        $b['batch_number'] ?? null,
+                        $b['expiry_date'] ?? null,
+                        !empty($b['requires_prescription']) ? 1 : 0,
+                        $b['description'] ?? null,
+                        $b['description_bn'] ?? null,
+                        $b['image_url'] ?? null,
+                    ]);
+                }
                 api_json(['data' => ['id' => $id]], 201);
             }
             api_error('Method not allowed', 405);
@@ -212,24 +410,47 @@ try {
                 $userId = require_auth($pdo, $config);
                 require_roles($pdo, $userId, ['staff', 'admin', 'super_admin']);
                 $b = api_body();
-                $pdo->prepare(
-                    'UPDATE products SET name=?, name_bn=?, generic_name=?, category=?, price=?, stock=?, min_stock=?, batch_number=?, expiry_date=?, requires_prescription=?, description=?, description_bn=?, image_url=? WHERE id=?'
-                )->execute([
-                    $b['name'] ?? '',
-                    $b['name_bn'] ?? null,
-                    $b['generic_name'] ?? null,
-                    $b['category'] ?? null,
-                    $b['price'] ?? 0,
-                    $b['stock'] ?? 0,
-                    $b['min_stock'] ?? 10,
-                    $b['batch_number'] ?? null,
-                    $b['expiry_date'] ?? null,
-                    !empty($b['requires_prescription']) ? 1 : 0,
-                    $b['description'] ?? null,
-                    $b['description_bn'] ?? null,
-                    $b['image_url'] ?? null,
-                    $id,
-                ]);
+                $hasMfr = (bool) $pdo->query("SHOW COLUMNS FROM products LIKE 'manufacturer'")->fetch();
+                if ($hasMfr) {
+                    $pdo->prepare(
+                        'UPDATE products SET name=?, name_bn=?, generic_name=?, manufacturer=?, category=?, price=?, stock=?, min_stock=?, batch_number=?, expiry_date=?, requires_prescription=?, description=?, description_bn=?, image_url=? WHERE id=?'
+                    )->execute([
+                        $b['name'] ?? '',
+                        $b['name_bn'] ?? null,
+                        $b['generic_name'] ?? null,
+                        $b['manufacturer'] ?? null,
+                        $b['category'] ?? null,
+                        $b['price'] ?? 0,
+                        $b['stock'] ?? 0,
+                        $b['min_stock'] ?? 10,
+                        $b['batch_number'] ?? null,
+                        $b['expiry_date'] ?? null,
+                        !empty($b['requires_prescription']) ? 1 : 0,
+                        $b['description'] ?? null,
+                        $b['description_bn'] ?? null,
+                        $b['image_url'] ?? null,
+                        $id,
+                    ]);
+                } else {
+                    $pdo->prepare(
+                        'UPDATE products SET name=?, name_bn=?, generic_name=?, category=?, price=?, stock=?, min_stock=?, batch_number=?, expiry_date=?, requires_prescription=?, description=?, description_bn=?, image_url=? WHERE id=?'
+                    )->execute([
+                        $b['name'] ?? '',
+                        $b['name_bn'] ?? null,
+                        $b['generic_name'] ?? null,
+                        $b['category'] ?? null,
+                        $b['price'] ?? 0,
+                        $b['stock'] ?? 0,
+                        $b['min_stock'] ?? 10,
+                        $b['batch_number'] ?? null,
+                        $b['expiry_date'] ?? null,
+                        !empty($b['requires_prescription']) ? 1 : 0,
+                        $b['description'] ?? null,
+                        $b['description_bn'] ?? null,
+                        $b['image_url'] ?? null,
+                        $id,
+                    ]);
+                }
                 api_json(['data' => ['id' => $id]]);
             }
             if ($method === 'DELETE') {
@@ -694,6 +915,65 @@ try {
         case 'categories':
             $stmt = $pdo->query('SELECT DISTINCT category FROM products WHERE category IS NOT NULL ORDER BY category');
             api_json(['data' => $stmt->fetchAll(PDO::FETCH_COLUMN)]);
+
+        case 'cms_content':
+            $hasCms = (bool) $pdo->query("SHOW TABLES LIKE 'cms_content'")->fetch();
+            if (!$hasCms) {
+                api_json(['data' => []]);
+            }
+            if ($method === 'GET') {
+                $status = $_GET['status'] ?? 'published';
+                $category = $_GET['category'] ?? null;
+                $sql = 'SELECT id, title, slug, content, category, status, excerpt, author_id, created_at FROM cms_content WHERE status = ?';
+                $params = [$status];
+                if ($category) {
+                    $sql .= ' AND category = ?';
+                    $params[] = $category;
+                }
+                $sql .= ' ORDER BY created_at DESC LIMIT 50';
+                $stmt = $pdo->prepare($sql);
+                $stmt->execute($params);
+                api_json(['data' => $stmt->fetchAll()]);
+            }
+            $userId = require_auth($pdo, $config);
+            require_roles($pdo, $userId, ['admin', 'super_admin']);
+            $b = api_body();
+            if ($method === 'POST') {
+                $id = uuid();
+                $slug = trim($b['slug'] ?? '') ?: strtolower(preg_replace('/[^a-z0-9]+/i', '-', $b['title'] ?? 'post'));
+                $pdo->prepare(
+                    'INSERT INTO cms_content (id, title, slug, content, category, status, excerpt, author_id) VALUES (?,?,?,?,?,?,?,?)'
+                )->execute([
+                    $id,
+                    $b['title'] ?? 'Untitled',
+                    $slug,
+                    $b['content'] ?? '',
+                    $b['category'] ?? 'announcement',
+                    $b['status'] ?? 'draft',
+                    $b['excerpt'] ?? '',
+                    $userId,
+                ]);
+                api_json(['data' => ['id' => $id]], 201);
+            }
+            if ($method === 'PUT' && !empty($_GET['id'])) {
+                $pdo->prepare(
+                    'UPDATE cms_content SET title=?, slug=?, content=?, category=?, status=?, excerpt=? WHERE id=?'
+                )->execute([
+                    $b['title'] ?? '',
+                    $b['slug'] ?? '',
+                    $b['content'] ?? '',
+                    $b['category'] ?? 'announcement',
+                    $b['status'] ?? 'draft',
+                    $b['excerpt'] ?? '',
+                    $_GET['id'],
+                ]);
+                api_json(['data' => ['id' => $_GET['id']]]);
+            }
+            if ($method === 'DELETE' && !empty($_GET['id'])) {
+                $pdo->prepare('DELETE FROM cms_content WHERE id = ?')->execute([$_GET['id']]);
+                api_json(['data' => ['deleted' => true]]);
+            }
+            api_error('Method not allowed', 405);
 
         case 'manufacturers':
             $userId = require_auth($pdo, $config);

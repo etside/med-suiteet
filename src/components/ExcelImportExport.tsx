@@ -9,7 +9,7 @@ interface ExcelImportExportProps {
   onImported: () => void;
 }
 
-const TEMPLATE_COLS = ["name", "name_bn", "generic_name", "category", "price", "stock", "min_stock", "batch_number", "expiry_date", "requires_prescription", "description"];
+const TEMPLATE_COLS = ["name", "name_bn", "generic_name", "manufacturer", "category", "price", "stock", "min_stock", "batch_number", "expiry_date", "requires_prescription", "description"];
 
 export function ExcelImportExport({ onImported }: ExcelImportExportProps) {
   const fileRef = useRef<HTMLInputElement>(null);
@@ -32,6 +32,7 @@ export function ExcelImportExport({ onImported }: ExcelImportExportProps) {
       name: p.name,
       name_bn: p.name_bn,
       generic_name: p.generic_name,
+      manufacturer: p.manufacturer,
       category: p.category,
       price: p.price,
       stock: p.stock,
@@ -64,10 +65,19 @@ export function ExcelImportExport({ onImported }: ExcelImportExportProps) {
         for (const row of rows) {
           if (!row.name) { failed++; continue; }
           try {
+            const descParts: string[] = [];
+            if (row.strength) descParts.push(`Strength: ${row.strength}`);
+            if (row.dosage_form) descParts.push(`Form: ${row.dosage_form}`);
+            if (row.drug_class) descParts.push(`Class: ${row.drug_class}`);
+            if (row.indication) descParts.push(`Indication: ${row.indication}`);
+            const baseDesc = row.description ? String(row.description) : "";
+            const description = [baseDesc, ...descParts].filter(Boolean).join(" | ") || null;
+
             await api.products.create({
-              name: String(row.name),
+              name: String(row.name).trim(),
               name_bn: row.name_bn ? String(row.name_bn) : null,
               generic_name: row.generic_name ? String(row.generic_name) : null,
+              manufacturer: row.manufacturer ? String(row.manufacturer) : null,
               category: row.category ? String(row.category) : null,
               price: Number(row.price) || 0,
               stock: Number(row.stock) || 0,
@@ -75,7 +85,7 @@ export function ExcelImportExport({ onImported }: ExcelImportExportProps) {
               batch_number: row.batch_number ? String(row.batch_number) : null,
               expiry_date: row.expiry_date ? String(row.expiry_date) : null,
               requires_prescription: String(row.requires_prescription).toLowerCase() === "true",
-              description: row.description ? String(row.description) : null,
+              description,
             });
             success++;
           } catch {

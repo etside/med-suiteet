@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { motion } from "framer-motion";
 import { Building2, ArrowRight } from "lucide-react";
+import { Skeleton } from "@/components/ui/skeleton";
 import { api, type ManufacturerRow } from "@/lib/api";
 import { useLanguage } from "@/contexts/LanguageContext";
 import { containerVariants, itemVariants } from "@/components/PageTransition";
@@ -56,7 +57,14 @@ const Manufacturers = () => {
       {loading ? (
         <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
           {Array.from({ length: 8 }).map((_, i) => (
-            <div key={i} className="h-48 rounded-xl bg-muted animate-pulse" />
+            <div key={i} className="overflow-hidden rounded-xl border border-border">
+              <Skeleton className="h-24 w-full rounded-none" />
+              <div className="space-y-2 p-4">
+                <Skeleton className="h-4 w-3/4" />
+                <Skeleton className="h-3 w-1/2" />
+                <Skeleton className="h-3 w-2/3" />
+              </div>
+            </div>
           ))}
         </div>
       ) : rows.length === 0 ? (

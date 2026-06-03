@@ -19,7 +19,7 @@ interface ProductDialogProps {
 }
 
 const defaultProduct = {
-  name: "", name_bn: "", generic_name: "", category: "analgesic",
+  name: "", name_bn: "", generic_name: "", manufacturer: "", category: "analgesic",
   price: 0, stock: 0, min_stock: 10, batch_number: "", expiry_date: "",
   requires_prescription: false, description: "", description_bn: "", image_url: "",
 };
@@ -33,7 +33,8 @@ export function ProductDialog({ open, onOpenChange, product, onSaved }: ProductD
     if (product) {
       setForm({
         name: product.name || "", name_bn: product.name_bn || "",
-        generic_name: product.generic_name || "", category: product.category || "analgesic",
+        generic_name: product.generic_name || "", manufacturer: product.manufacturer || "",
+        category: product.category || "analgesic",
         price: product.price || 0, stock: product.stock || 0, min_stock: product.min_stock || 10,
         batch_number: product.batch_number || "", expiry_date: product.expiry_date || "",
         requires_prescription: product.requires_prescription || false,
@@ -51,6 +52,7 @@ export function ProductDialog({ open, onOpenChange, product, onSaved }: ProductD
 
     const payload = {
       name: form.name, name_bn: form.name_bn || null, generic_name: form.generic_name || null,
+      manufacturer: form.manufacturer || null,
       category: form.category, price: Number(form.price), stock: Number(form.stock),
       min_stock: Number(form.min_stock), batch_number: form.batch_number || null,
       expiry_date: form.expiry_date || null, requires_prescription: form.requires_prescription,
@@ -102,6 +104,10 @@ export function ProductDialog({ open, onOpenChange, product, onSaved }: ProductD
           <div className="space-y-1.5">
             <Label>Generic Name</Label>
             <Input value={form.generic_name} onChange={(e) => set("generic_name", e.target.value)} placeholder="e.g. Paracetamol 500mg" />
+          </div>
+          <div className="space-y-1.5">
+            <Label>Manufacturer</Label>
+            <Input value={form.manufacturer} onChange={(e) => set("manufacturer", e.target.value)} placeholder="e.g. Square Pharmaceuticals" />
           </div>
           <div className="grid grid-cols-2 gap-3">
             <div className="space-y-1.5">

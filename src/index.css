@@ -1,3 +1,7 @@
+.safe-area-pb {
+  padding-bottom: max(0.5rem, env(safe-area-inset-bottom));
+}
+
 @tailwind base;
 @tailwind components;
 @tailwind utilities;

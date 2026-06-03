@@ -14,8 +14,10 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
           <header className="sticky top-0 z-30 flex h-14 items-center justify-between gap-4 border-b border-border bg-background/95 px-4 backdrop-blur supports-[backdrop-filter]:bg-background/60">
             <div className="flex items-center gap-3">
               <SidebarTrigger />
-              <img src="/logo.png" alt="Medsuite-eT" className="h-6 w-6 rounded object-contain sm:hidden" />
-              <h2 className="text-lg font-semibold text-foreground hidden sm:block">Medsuite-eT</h2>
+              <img src="/logo.svg" alt="MedSuite" className="h-6 w-6 rounded object-contain sm:hidden" />
+              <h2 className="text-lg font-semibold tracking-tight text-foreground hidden sm:block">
+                Med<span className="text-primary">Suite</span>
+              </h2>
             </div>
             <div className="flex items-center gap-2">
               <ThemeSwitcher />

@@ -8,6 +8,9 @@ import { ColorThemeProvider } from "@/components/ColorThemeProvider";
 import { LanguageProvider } from "@/contexts/LanguageContext";
 import { AuthProvider, useAuth } from "@/contexts/AuthContext";
 import { AppLayout } from "@/components/AppLayout";
+import { AuthLoading } from "@/components/AuthLoading";
+import { OfflineBanner } from "@/components/OfflineBanner";
+import { RoleRoute } from "@/components/RoleRoute";
 
 import Landing from "./pages/Landing";
 import EnhancedAuth from "./pages/EnhancedAuth";
@@ -37,19 +40,18 @@ import { AnimatedOutlet } from "@/components/AnimatedRoutes";
 
 const queryClient = new QueryClient();
 
+/** Public marketing home; signed-in users go to the dashboard. */
+function Home() {
+  const { user, loading } = useAuth();
+  if (loading) return <AuthLoading />;
+  if (user) return <Navigate to="/dashboard" replace />;
+  return <Landing />;
+}
+
 function ProtectedRoutes() {
   const { user, loading, approvalStatus, signOut } = useAuth();
 
-  if (loading) {
-    return (
-      <div className="flex min-h-screen items-center justify-center bg-background">
-        <div className="flex flex-col items-center gap-3">
-          <div className="h-10 w-10 animate-spin rounded-full border-4 border-primary border-t-transparent" />
-          <p className="text-muted-foreground">Loading...</p>
-        </div>
-      </div>
-    );
-  }
+  if (loading) return <AuthLoading />;
 
   if (!user) {
     return <Navigate to="/auth" replace />;
@@ -91,20 +93,21 @@ function ProtectedRoutes() {
     <AppLayout>
       <Routes>
         <Route element={<AnimatedOutlet />}>
-          <Route path="/" element={<Dashboard />} />
-          <Route path="/products" element={<Products />} />
-          <Route path="/manufacturers" element={<Manufacturers />} />
-          <Route path="/inventory" element={<Inventory />} />
-          <Route path="/sales" element={<Sales />} />
-          <Route path="/purchases" element={<Purchases />} />
-          <Route path="/qr-scanner" element={<QrScanner />} />
-          <Route path="/reports" element={<Reports />} />
-          <Route path="/admin" element={<AdminPanel />} />
-          <Route path="/admin/orders" element={<AdminOrders />} />
-          <Route path="/admin/users" element={<UserManagement />} />
-          <Route path="/admin/customers" element={<CustomerLedger />} />
-          <Route path="/admin/cms" element={<CMS />} />
-          <Route path="/settings" element={<SettingsPage />} />
+          <Route path="/dashboard" element={<Dashboard />} />
+          <Route path="/" element={<Navigate to="/dashboard" replace />} />
+          <Route path="/products" element={<RoleRoute require="staff"><Products /></RoleRoute>} />
+          <Route path="/manufacturers" element={<RoleRoute require="staff"><Manufacturers /></RoleRoute>} />
+          <Route path="/inventory" element={<RoleRoute require="staff"><Inventory /></RoleRoute>} />
+          <Route path="/sales" element={<RoleRoute require="staff"><Sales /></RoleRoute>} />
+          <Route path="/purchases" element={<RoleRoute require="staff"><Purchases /></RoleRoute>} />
+          <Route path="/qr-scanner" element={<RoleRoute require="staff"><QrScanner /></RoleRoute>} />
+          <Route path="/reports" element={<RoleRoute require="staff"><Reports /></RoleRoute>} />
+          <Route path="/admin" element={<RoleRoute require="admin"><AdminPanel /></RoleRoute>} />
+          <Route path="/admin/orders" element={<RoleRoute require="staff"><AdminOrders /></RoleRoute>} />
+          <Route path="/admin/users" element={<RoleRoute require="admin"><UserManagement /></RoleRoute>} />
+          <Route path="/admin/customers" element={<RoleRoute require="admin"><CustomerLedger /></RoleRoute>} />
+          <Route path="/admin/cms" element={<RoleRoute require="admin"><CMS /></RoleRoute>} />
+          <Route path="/settings" element={<RoleRoute require="admin"><SettingsPage /></RoleRoute>} />
           <Route path="/profile" element={<Profile />} />
           <Route path="/notifications" element={<Notifications />} />
           <Route path="/shop" element={<Shop />} />
@@ -127,8 +130,10 @@ const App = () => (
               <Toaster />
               <Sonner />
               <BrowserRouter>
+                <OfflineBanner />
                 <Routes>
-                  <Route path="/landing" element={<Landing />} />
+                  <Route path="/" element={<Home />} />
+                  <Route path="/landing" element={<Navigate to="/" replace />} />
                   <Route path="/auth" element={<EnhancedAuth />} />
                   <Route path="/auth-legacy" element={<Auth />} />
                   <Route path="/reset-password" element={<ResetPassword />} />

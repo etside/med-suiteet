@@ -27,7 +27,7 @@ const ResetPassword = () => {
     try {
       await api.auth.updatePassword(password);
       toast.success("Password updated successfully!");
-      navigate("/");
+      navigate("/dashboard");
     } catch (e: any) {
       toast.error(e.message || "Failed to update password");
     }
