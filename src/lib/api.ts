@@ -82,12 +82,12 @@ export const api = {
           roles: AppRole[];
           approval_status: string;
         };
-      }>("auth_login", { method: "POST", body: { email, password } });
+      }>("login", { method: "POST", body: { email, password } });
       setToken(res.data.token);
       return res.data;
     },
     signup: (full_name: string, email: string, password: string) =>
-      request<{ data: { message: string } }>("auth_signup", {
+      request<{ data: { message: string } }>("signup", {
         method: "POST",
         body: { full_name, email, password },
       }),
@@ -99,7 +99,7 @@ export const api = {
           profile: Record<string, unknown>;
           approval_status: string;
         };
-      }>("auth_me"),
+      }>("user"),
     updatePassword: (password: string) =>
       request("auth_password", { method: "POST", body: { password } }),
     logout: () => {
