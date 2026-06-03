@@ -13,7 +13,8 @@
     "preview": "vite preview",
     "test": "vitest run",
     "test:watch": "vitest",
-    "import:products": "node scripts/import-med-products.mjs"
+    "import:products": "node scripts/import-med-products.mjs",
+    "migrate": "node scripts/run-migrations.mjs"
   },
   "dependencies": {
     "@hookform/resolvers": "^3.10.0",
