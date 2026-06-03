@@ -81,7 +81,7 @@ export function BulkBarcodeDialog({ open, onOpenChange, products, mode }: BulkBa
           <div className="grid grid-cols-2 sm:grid-cols-3 gap-3 mt-4" style={{ display: "grid", gridTemplateColumns: "repeat(3,1fr)", gap: "10px" }}>
             {selectedProducts.map((p) => (
               <div key={p.id} className="item border rounded p-2 text-center" style={{ border: "1px solid #ddd", padding: "8px", textAlign: "center" }}>
-                <BarcodeGenerator value={p.batch_number || p.id.slice(0, 12)} height={35} width={1.5} fontSize={10} />
+                <BarcodeGenerator value={p.batch_number || String(p.id).slice(0, 12)} height={35} width={1.5} fontSize={10} />
                 <p style={{ margin: "2px 0", fontSize: "10px", fontWeight: "bold" }}>{p.name}</p>
                 <p style={{ margin: "2px 0", fontSize: "9px" }}>৳{Number(p.price).toFixed(2)}</p>
               </div>

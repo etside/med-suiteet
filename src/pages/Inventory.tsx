@@ -132,7 +132,7 @@ const Inventory = () => {
                     </TableCell>
                     <TableCell className="hidden md:table-cell">
                       <div className="scale-[0.5] origin-left">
-                        <BarcodeGenerator value={item.batch_number || item.id.slice(0, 12)} height={25} width={1} displayValue={false} />
+                        <BarcodeGenerator value={item.batch_number || String(item.id).slice(0, 12)} height={25} width={1} displayValue={false} />
                       </div>
                     </TableCell>
                   </TableRow>

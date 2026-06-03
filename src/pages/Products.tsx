@@ -130,7 +130,7 @@ const Products = () => {
                   <TableCell className="hidden md:table-cell">
                     {(p.batch_number || p.id) && (
                       <div className="scale-[0.6] origin-left">
-                        <BarcodeGenerator value={p.batch_number || p.id.slice(0, 12)} height={25} width={1} displayValue={false} />
+                        <BarcodeGenerator value={p.batch_number || String(p.id).slice(0, 12)} height={25} width={1} displayValue={false} />
                       </div>
                     )}
                   </TableCell>

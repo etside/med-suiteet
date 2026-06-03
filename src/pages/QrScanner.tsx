@@ -200,7 +200,7 @@ const QrScanner = () => {
                   <div><p className="text-muted-foreground text-xs">Expiry</p><p>{product.expiry_date || "N/A"}</p></div>
                 </div>
                 <div className="mt-3">
-                  <BarcodeGenerator value={product.batch_number || product.id.slice(0, 12)} height={40} />
+                  <BarcodeGenerator value={product.batch_number || String(product.id).slice(0, 12)} height={40} />
                 </div>
               </CardContent>
             </Card>
