@@ -63,6 +63,10 @@ exports.handler = async (event, context) => {
       return await handleGetUser(event, origin);
     }
 
+    if (action === 'dashboard') {
+      return await handleDashboard(event, origin);
+    }
+
     // Catch undefined actions
     return {
       statusCode: 400,
@@ -288,6 +292,83 @@ async function handleGetUser(event, origin) {
       statusCode: 401,
       headers: corsHeaders(origin),
       body: JSON.stringify({ error: 'Invalid token: ' + error.message })
+    };
+  }
+}
+
+// Dashboard stats endpoint
+async function handleDashboard(event, origin) {
+  try {
+    const authHeader = event.headers.authorization;
+    
+    if (!authHeader) {
+      return {
+        statusCode: 401,
+        headers: corsHeaders(origin),
+        body: JSON.stringify({ error: 'Unauthorized' })
+      };
+    }
+
+    const token = authHeader.replace('Bearer ', '');
+    
+    try {
+      jwt.verify(token, JWT_SECRET);
+    } catch (error) {
+      return {
+        statusCode: 401,
+        headers: corsHeaders(origin),
+        body: JSON.stringify({ error: 'Invalid token' })
+      };
+    }
+
+    // Query dashboard stats
+    const productCount = await query('SELECT COUNT(*) as count FROM products');
+    const lowStock = await query('SELECT COUNT(*) as count FROM products WHERE quantity < min_quantity');
+    const pendingOrders = await query("SELECT COUNT(*) as count FROM orders WHERE status = 'pending'");
+    const expiringProducts = await query('SELECT COUNT(*) as count FROM products WHERE expiry_date IS NOT NULL AND expiry_date <= CURRENT_DATE + INTERVAL \'30 days\'');
+    const userCount = await query('SELECT COUNT(*) as count FROM users');
+    const supplierCount = await query('SELECT COUNT(*) as count FROM suppliers');
+    const todaySales = await query('SELECT COALESCE(SUM(total), 0) as total FROM orders WHERE DATE(created_at) = CURRENT_DATE');
+    const monthlyRevenue = await query('SELECT COALESCE(SUM(total), 0) as total FROM orders WHERE DATE_TRUNC(\'month\', created_at) = DATE_TRUNC(\'month\', CURRENT_DATE)');
+    const topStock = await query('SELECT name, quantity FROM products ORDER BY quantity DESC LIMIT 5');
+    const weeklySales = await query(`
+      SELECT 
+        DATE(created_at) as created_at,
+        COALESCE(SUM(total), 0) as total
+      FROM orders
+      WHERE created_at >= CURRENT_DATE - INTERVAL '7 days'
+      GROUP BY DATE(created_at)
+      ORDER BY DATE(created_at) DESC
+    `);
+
+    return {
+      statusCode: 200,
+      headers: corsHeaders(origin),
+      body: JSON.stringify({
+        data: {
+          product_count: parseInt(productCount.rows[0]?.count || 0),
+          low_stock: parseInt(lowStock.rows[0]?.count || 0),
+          pending_orders: parseInt(pendingOrders.rows[0]?.count || 0),
+          expiring_soon: parseInt(expiringProducts.rows[0]?.count || 0),
+          user_count: parseInt(userCount.rows[0]?.count || 0),
+          supplier_count: parseInt(supplierCount.rows[0]?.count || 0),
+          pending_approvals: 0,
+          today_sales: parseFloat(todaySales.rows[0]?.total || 0),
+          monthly_revenue: parseFloat(monthlyRevenue.rows[0]?.total || 0),
+          top_stock: topStock.rows.map(row => ({ name: row.name, stock: row.quantity })),
+          week_sales: weeklySales.rows.map(row => ({ 
+            total: parseFloat(row.total),
+            created_at: row.created_at
+          }))
+        }
+      })
+    };
+  } catch (error) {
+    console.error('Dashboard error:', error);
+    return {
+      statusCode: 500,
+      headers: corsHeaders(origin),
+      body: JSON.stringify({ error: 'Failed to fetch dashboard stats: ' + error.message })
     };
   }
 }
