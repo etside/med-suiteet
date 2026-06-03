@@ -2,7 +2,7 @@
  * Medsuite-eT — MySQL API client (PHP backend)
  */
 
-const API_BASE = import.meta.env.VITE_API_URL || "/api/index.php";
+const API_BASE = import.meta.env.VITE_API_URL || "/.netlify/functions/api";
 const TOKEN_KEY = "medsuite_et_token";
 
 export type AppRole = "admin" | "staff" | "customer" | "super_admin";
