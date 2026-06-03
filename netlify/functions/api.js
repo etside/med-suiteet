@@ -37,12 +37,21 @@ exports.handler = async (event, context) => {
     const { action, email, password, search } = event.queryStringParameters || {};
     const authHeader = event.headers.authorization;
 
-    // Routes - accept both old and new action names
-    if ((action === 'login' || action === 'auth_login') && event.httpMethod === 'POST') {
+    // Health check endpoint
+    if (action === 'health') {
+      return {
+        statusCode: 200,
+        headers: corsHeaders(origin),
+        body: JSON.stringify({ data: { status: 'ok' } })
+      };
+    }
+
+    // Routes
+    if (action === 'login' && event.httpMethod === 'POST') {
       return await handleLogin(event, origin);
     }
     
-    if ((action === 'signup' || action === 'auth_signup') && event.httpMethod === 'POST') {
+    if (action === 'signup' && event.httpMethod === 'POST') {
       return await handleSignup(event, origin);
     }
     
@@ -54,17 +63,18 @@ exports.handler = async (event, context) => {
       return await handleGetUser(event, origin);
     }
 
+    // Catch undefined actions
     return {
       statusCode: 400,
       headers: corsHeaders(origin),
-      body: JSON.stringify({ error: 'Invalid action' })
+      body: JSON.stringify({ error: 'Invalid action: ' + (action || 'not provided') })
     };
   } catch (error) {
     console.error('API Error:', error);
     return {
       statusCode: 500,
       headers: corsHeaders(origin),
-      body: JSON.stringify({ error: 'Internal server error' })
+      body: JSON.stringify({ error: 'Internal server error', details: error.message })
     };
   }
 };
@@ -123,12 +133,10 @@ async function handleLogin(event, origin) {
     return {
       statusCode: 200,
       headers: corsHeaders(origin),
-      body: JSON.stringify({
+      body: JSON.stringify({ 
         data: {
-          token,
-          user: { id: user.id, email: user.email },
-          roles: [user.role],
-          approval_status: 'approved'
+          token, 
+          user: { id: user.id, email: user.email, role: user.role }
         }
       })
     };
@@ -137,7 +145,7 @@ async function handleLogin(event, origin) {
     return {
       statusCode: 500,
       headers: corsHeaders(origin),
-      body: JSON.stringify({ error: 'Login failed' })
+      body: JSON.stringify({ error: 'Login failed: ' + error.message })
     };
   }
 }
@@ -193,12 +201,10 @@ async function handleSignup(event, origin) {
     return {
       statusCode: 201,
       headers: corsHeaders(origin),
-      body: JSON.stringify({
+      body: JSON.stringify({ 
         data: {
-          token,
-          user: { id: user.id, email: user.email },
-          roles: [user.role],
-          approval_status: 'approved'
+          token, 
+          user: { id: user.id, email: user.email, role: user.role }
         }
       })
     };
@@ -207,7 +213,7 @@ async function handleSignup(event, origin) {
     return {
       statusCode: 500,
       headers: corsHeaders(origin),
-      body: JSON.stringify({ error: 'Signup failed' })
+      body: JSON.stringify({ error: 'Signup failed: ' + error.message })
     };
   }
 }
@@ -261,25 +267,17 @@ async function handleGetUser(event, origin) {
       };
     }
 
-    const user = result.rows[0];
     return {
       statusCode: 200,
       headers: corsHeaders(origin),
-      body: JSON.stringify({
-        data: {
-          user: { id: user.id, email: user.email },
-          roles: [user.role],
-          profile: {},
-          approval_status: 'approved'
-        }
-      })
+      body: JSON.stringify({ data: result.rows[0] })
     };
   } catch (error) {
     console.error('User error:', error);
     return {
       statusCode: 401,
       headers: corsHeaders(origin),
-      body: JSON.stringify({ error: 'Invalid token' })
+      body: JSON.stringify({ error: 'Invalid token: ' + error.message })
     };
   }
 }
