@@ -6,12 +6,14 @@ import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContaine
 import { api } from "@/lib/api";
 import { useAuth } from "@/contexts/AuthContext";
 import { useNavigate } from "react-router-dom";
+import Onboarding from "@/components/Onboarding";
 
 const COLORS = ["hsl(174, 84%, 32%)", "hsl(199, 89%, 48%)", "hsl(38, 92%, 50%)", "hsl(142, 76%, 36%)"];
 
 const Dashboard = () => {
   const { isStaff } = useAuth();
   const navigate = useNavigate();
+  const [showOnboarding, setShowOnboarding] = useState(false);
   const [productCount, setProductCount] = useState(0);
   const [lowStockCount, setLowStockCount] = useState(0);
   const [pendingOrders, setPendingOrders] = useState(0);
@@ -50,6 +52,14 @@ const Dashboard = () => {
       }
     };
     if (isStaff) fetchStats();
+  }, [isStaff]);
+
+  // Check if user is new and should see onboarding
+  useEffect(() => {
+    const onboardingCompleted = localStorage.getItem("onboarding_completed");
+    if (!onboardingCompleted && isStaff) {
+      setShowOnboarding(true);
+    }
   }, [isStaff]);
 
   if (!isStaff) {
@@ -184,6 +194,10 @@ const Dashboard = () => {
           </CardContent>
         </Card>
       </div>
+
+      {showOnboarding && (
+        <Onboarding onComplete={() => setShowOnboarding(false)} />
+      )}
     </div>
   );
 };

@@ -8,6 +8,8 @@ import { LanguageProvider } from "@/contexts/LanguageContext";
 import { AuthProvider, useAuth } from "@/contexts/AuthContext";
 import { AppLayout } from "@/components/AppLayout";
 
+import Landing from "./pages/Landing";
+import EnhancedAuth from "./pages/EnhancedAuth";
 import Dashboard from "./pages/Dashboard";
 import Products from "./pages/Products";
 import Inventory from "./pages/Inventory";
@@ -19,6 +21,7 @@ import AdminPanel from "./pages/AdminPanel";
 import AdminOrders from "./pages/AdminOrders";
 import UserManagement from "./pages/UserManagement";
 import SettingsPage from "./pages/SettingsPage";
+import CMS from "./pages/CMS";
 import Auth from "./pages/Auth";
 import ResetPassword from "./pages/ResetPassword";
 import Shop from "./pages/Shop";
@@ -94,6 +97,7 @@ function ProtectedRoutes() {
         <Route path="/admin/orders" element={<AdminOrders />} />
         <Route path="/admin/users" element={<UserManagement />} />
         <Route path="/admin/customers" element={<CustomerLedger />} />
+        <Route path="/admin/cms" element={<CMS />} />
         <Route path="/settings" element={<SettingsPage />} />
         <Route path="/profile" element={<Profile />} />
         <Route path="/shop" element={<Shop />} />
@@ -115,7 +119,9 @@ const App = () => (
             <Sonner />
             <BrowserRouter>
               <Routes>
-                <Route path="/auth" element={<Auth />} />
+                <Route path="/landing" element={<Landing />} />
+                <Route path="/auth" element={<EnhancedAuth />} />
+                <Route path="/auth-legacy" element={<Auth />} />
                 <Route path="/reset-password" element={<ResetPassword />} />
                 <Route path="/*" element={<ProtectedRoutes />} />
               </Routes>

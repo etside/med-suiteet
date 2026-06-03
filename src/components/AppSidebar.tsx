@@ -2,7 +2,7 @@ import { useState, useEffect } from "react";
 import { Link, useLocation } from "react-router-dom";
 import {
   LayoutDashboard, Package, Warehouse, ShoppingCart, ClipboardList,
-  BarChart3, Settings, Shield, Users, QrCode, Sun, Moon, Store, Truck, LogOut, ClipboardCheck, BookUser, MessageCircle, User,
+  BarChart3, Settings, Shield, Users, QrCode, Sun, Moon, Store, Truck, LogOut, ClipboardCheck, BookUser, MessageCircle, User, FileText,
 } from "lucide-react";
 import { useTheme } from "@/components/ThemeProvider";
 import { Button } from "@/components/ui/button";
@@ -50,6 +50,7 @@ export function AppSidebar() {
     ...(isAdmin ? [
       { title: t("nav_user_mgmt"), icon: Users, href: "/admin/users" },
       { title: "Customer Ledger", icon: BookUser, href: "/admin/customers" },
+      { title: "Content Manager", icon: FileText, href: "/admin/cms" },
       { title: t("nav_admin"), icon: Shield, href: "/admin" },
       { title: t("nav_settings"), icon: Settings, href: "/settings" },
     ] : []),
