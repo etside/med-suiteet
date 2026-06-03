@@ -236,6 +236,9 @@ export const api = {
 
   dashboard: () => request<{ data: DashboardStats }>("dashboard").then((r) => r.data),
 
+  manufacturers: () =>
+    request<{ data: ManufacturerRow[] }>("manufacturers").then((r) => r.data),
+
   cms: {
     list: (query?: { category?: string; status?: string; page?: string; limit?: string }) =>
       request<{ data: Record<string, unknown>[] }>("cms_content", { 
@@ -297,7 +300,15 @@ export interface DashboardStats {
   today_sales: number;
   monthly_revenue: number;
   top_stock: { name: string; stock: number }[];
+  top_selling?: { name: string; qty: number }[];
   week_sales: { total: number; created_at: string }[];
+}
+
+export interface ManufacturerRow {
+  name: string;
+  medicines: number;
+  prescriptions: number;
+  divisions: number;
 }
 
 export { ApiError };

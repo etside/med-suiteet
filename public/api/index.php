@@ -626,6 +626,29 @@ try {
             $monthlyRevenue = (float) $st->fetchColumn();
             $topStock = $pdo->query('SELECT name, stock FROM products ORDER BY stock DESC LIMIT 4')->fetchAll();
             $weekSales = $pdo->query('SELECT total, created_at FROM sales WHERE created_at >= DATE_SUB(NOW(), INTERVAL 7 DAY)')->fetchAll();
+
+            $topSelling = [];
+            $salesRows = $pdo->query('SELECT items FROM sales WHERE created_at >= DATE_SUB(NOW(), INTERVAL 30 DAY)')->fetchAll();
+            $qtyByName = [];
+            foreach ($salesRows as $saleRow) {
+                $items = json_decode($saleRow['items'] ?? '[]', true);
+                if (!is_array($items)) {
+                    continue;
+                }
+                foreach ($items as $item) {
+                    $name = trim((string) ($item['name'] ?? ''));
+                    if ($name === '') {
+                        continue;
+                    }
+                    $qty = (int) ($item['qty'] ?? 1);
+                    $qtyByName[$name] = ($qtyByName[$name] ?? 0) + max(1, $qty);
+                }
+            }
+            arsort($qtyByName);
+            foreach (array_slice($qtyByName, 0, 8, true) as $name => $qty) {
+                $topSelling[] = ['name' => $name, 'qty' => $qty];
+            }
+
             api_json([
                 'data' => [
                     'product_count' => (int) $pdo->query('SELECT COUNT(*) FROM products')->fetchColumn(),
@@ -638,6 +661,7 @@ try {
                     'today_sales' => $todaySales,
                     'monthly_revenue' => $monthlyRevenue,
                     'top_stock' => $topStock,
+                    'top_selling' => $topSelling,
                     'week_sales' => $weekSales,
                 ],
             ]);
@@ -670,6 +694,33 @@ try {
         case 'categories':
             $stmt = $pdo->query('SELECT DISTINCT category FROM products WHERE category IS NOT NULL ORDER BY category');
             api_json(['data' => $stmt->fetchAll(PDO::FETCH_COLUMN)]);
+
+        case 'manufacturers':
+            $userId = require_auth($pdo, $config);
+            require_roles($pdo, $userId, ['staff', 'admin', 'super_admin']);
+            $hasMfr = (bool) $pdo->query("SHOW COLUMNS FROM products LIKE 'manufacturer'")->fetch();
+            if ($hasMfr) {
+                $stmt = $pdo->query(
+                    "SELECT COALESCE(NULLIF(TRIM(manufacturer), ''), 'General') AS name,
+                            COUNT(*) AS medicines,
+                            SUM(requires_prescription) AS prescriptions,
+                            COUNT(DISTINCT category) AS divisions
+                     FROM products
+                     GROUP BY COALESCE(NULLIF(TRIM(manufacturer), ''), 'General')
+                     ORDER BY medicines DESC"
+                );
+            } else {
+                $stmt = $pdo->query(
+                    "SELECT COALESCE(NULLIF(TRIM(category), ''), 'general') AS name,
+                            COUNT(*) AS medicines,
+                            SUM(requires_prescription) AS prescriptions,
+                            1 AS divisions
+                     FROM products
+                     GROUP BY COALESCE(NULLIF(TRIM(category), ''), 'general')
+                     ORDER BY medicines DESC"
+                );
+            }
+            api_json(['data' => $stmt->fetchAll()]);
 
         default:
             api_error("Unknown action: $action", 400);

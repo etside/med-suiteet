@@ -1,4 +1,5 @@
 import { useState, useEffect } from "react";
+import { useSearchParams } from "react-router-dom";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -20,6 +21,8 @@ import {
 
 const Products = () => {
   const { isStaff } = useAuth();
+  const [searchParams] = useSearchParams();
+  const categoryFilter = searchParams.get("category") || "";
   const [search, setSearch] = useState("");
   const [products, setProducts] = useState<any[]>([]);
   const [dialogOpen, setDialogOpen] = useState(false);
@@ -45,9 +48,13 @@ const Products = () => {
     setDeleteId(null);
   };
 
-  const filtered = products.filter((p) =>
-    p.name.toLowerCase().includes(search.toLowerCase()) || (p.generic_name || "").toLowerCase().includes(search.toLowerCase()) || (p.batch_number || "").toLowerCase().includes(search.toLowerCase())
-  );
+  const filtered = products.filter((p) => {
+    const matchSearch = p.name.toLowerCase().includes(search.toLowerCase()) ||
+      (p.generic_name || "").toLowerCase().includes(search.toLowerCase()) ||
+      (p.batch_number || "").toLowerCase().includes(search.toLowerCase());
+    const matchCategory = !categoryFilter || (p.category || "") === categoryFilter;
+    return matchSearch && matchCategory;
+  });
 
   const isExpiringSoon = (date: string | null) => {
     if (!date) return false;

@@ -1,23 +1,49 @@
 import { useEffect, useState } from "react";
+import { useNavigate } from "react-router-dom";
+import { motion } from "framer-motion";
+import {
+  Package, ShoppingCart, TrendingUp, AlertTriangle, DollarSign, Clock,
+  BarChart3, FileText, Settings, Users, QrCode, ClipboardList, Bell, User,
+  Shield, BookUser, MessageCircle, Warehouse,
+} from "lucide-react";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { Package, ShoppingCart, TrendingUp, AlertTriangle, DollarSign, Clock, Users, BarChart3, FileText, Settings } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, PieChart, Pie, Cell } from "recharts";
+import {
+  LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer,
+} from "recharts";
 import { api } from "@/lib/api";
 import { useAuth } from "@/contexts/AuthContext";
-import { useNavigate } from "react-router-dom";
+import { useLanguage } from "@/contexts/LanguageContext";
 import Onboarding from "@/components/Onboarding";
+import { containerVariants, itemVariants } from "@/components/PageTransition";
 
-const COLORS = ["hsl(174, 84%, 32%)", "hsl(199, 89%, 48%)", "hsl(38, 92%, 50%)", "hsl(142, 76%, 36%)"];
+const WHATSAPP_HELP = "https://wa.me/8801873722228?text=Hi%2C%20I%20need%20help%20with%20MedSuite";
+
+const NAV_TILES = [
+  { titleKey: "nav_sales", icon: ShoppingCart, path: "/sales", color: "bg-emerald-500/15 text-emerald-500" },
+  { titleKey: "nav_products", icon: Package, path: "/products", color: "bg-blue-500/15 text-blue-500" },
+  { titleKey: "nav_inventory", icon: Warehouse, path: "/inventory", color: "bg-amber-500/15 text-amber-500" },
+  { titleKey: "nav_purchases", icon: ClipboardList, path: "/purchases", color: "bg-violet-500/15 text-violet-500" },
+  { titleKey: "nav_reports", icon: BarChart3, path: "/reports", color: "bg-pink-500/15 text-pink-500" },
+  { titleKey: "nav_qr_scanner", icon: QrCode, path: "/qr-scanner", color: "bg-cyan-500/15 text-cyan-500" },
+  { titleKey: "admin_orders", icon: ClipboardList, path: "/admin/orders", color: "bg-orange-500/15 text-orange-500" },
+  { titleKey: "nav_notifications", icon: Bell, path: "/notifications", color: "bg-red-500/15 text-red-500" },
+  { titleKey: "nav_profile", icon: User, path: "/profile", color: "bg-slate-500/15 text-slate-400" },
+  { titleKey: "nav_user_mgmt", icon: Users, path: "/admin/users", color: "bg-blue-500/15 text-blue-400", adminOnly: true },
+  { titleKey: "nav_admin", icon: Shield, path: "/admin", color: "bg-red-500/15 text-red-400", adminOnly: true },
+  { titleKey: "nav_settings", icon: Settings, path: "/settings", color: "bg-primary/15 text-primary", adminOnly: true },
+  { titleKey: "nav_customer_ledger", icon: BookUser, path: "/admin/customers", color: "bg-lime-500/15 text-lime-500", adminOnly: true },
+] as const;
 
 const Dashboard = () => {
-  const { isStaff } = useAuth();
+  const { isStaff, isAdmin } = useAuth();
   const navigate = useNavigate();
+  const { t } = useLanguage();
   const [showOnboarding, setShowOnboarding] = useState(false);
   const [productCount, setProductCount] = useState(0);
   const [lowStockCount, setLowStockCount] = useState(0);
   const [pendingOrders, setPendingOrders] = useState(0);
-  const [topProducts, setTopProducts] = useState<{ name: string; value: number }[]>([]);
+  const [topSelling, setTopSelling] = useState<{ name: string; qty: number }[]>([]);
   const [todaySales, setTodaySales] = useState(0);
   const [monthlyRevenue, setMonthlyRevenue] = useState(0);
   const [expiringCount, setExpiringCount] = useState(0);
@@ -33,20 +59,24 @@ const Dashboard = () => {
         setExpiringCount(stats.expiring_soon);
         setTodaySales(stats.today_sales);
         setMonthlyRevenue(stats.monthly_revenue);
-        setTopProducts((stats.top_stock || []).map((p) => ({ name: p.name, value: p.stock })));
+        setTopSelling(stats.top_selling || []);
 
-        const today = new Date();
-        const days = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
+        const labels: string[] = [];
         const byDay: Record<string, number> = {};
         for (let i = 6; i >= 0; i--) {
-          const d = new Date(today.getTime() - i * 24 * 60 * 60 * 1000);
-          byDay[days[d.getDay()]] = 0;
+          const d = new Date();
+          d.setDate(d.getDate() - i);
+          const key = d.toLocaleDateString("en-US", { weekday: "short" });
+          labels.push(key);
+          byDay[key] = 0;
         }
         (stats.week_sales || []).forEach((s) => {
-          const day = days[new Date(s.created_at).getDay()];
-          byDay[day] = (byDay[day] || 0) + Number(s.total);
+          const key = new Date(s.created_at).toLocaleDateString("en-US", { weekday: "short" });
+          if (key in byDay) {
+            byDay[key] = (byDay[key] || 0) + Number(s.total);
+          }
         });
-        setWeeklySales(Object.entries(byDay).map(([day, sales]) => ({ day, sales })));
+        setWeeklySales(labels.map((day) => ({ day, sales: byDay[day] ?? 0 })));
       } catch {
         /* ignore */
       }
@@ -54,7 +84,6 @@ const Dashboard = () => {
     if (isStaff) fetchStats();
   }, [isStaff]);
 
-  // Check if user is new and should see onboarding
   useEffect(() => {
     const onboardingCompleted = localStorage.getItem("onboarding_completed");
     if (!onboardingCompleted && isStaff) {
@@ -66,25 +95,25 @@ const Dashboard = () => {
     return (
       <div className="space-y-6 px-1">
         <div>
-          <h1 className="text-xl sm:text-2xl font-bold text-foreground">Welcome to Medsuite-eT</h1>
-          <p className="text-sm text-muted-foreground mt-1">Browse our online shop or track your orders.</p>
+          <h1 className="text-xl sm:text-2xl font-bold text-foreground">{t("dash_welcome_guest")}</h1>
+          <p className="text-sm text-muted-foreground mt-1">{t("dash_guest_sub")}</p>
         </div>
         <div className="grid gap-3 grid-cols-1 sm:grid-cols-2">
-          <Card className="cursor-pointer hover:border-primary/50 transition-colors" onClick={() => navigate("/shop")}>
+          <Card className="card-interactive cursor-pointer" onClick={() => navigate("/shop")}>
             <CardContent className="flex items-center gap-3 p-4">
               <ShoppingCart className="h-8 w-8 text-primary" />
               <div>
-                <p className="font-semibold">Online Shop</p>
-                <p className="text-xs text-muted-foreground">Browse & order medicines</p>
+                <p className="font-semibold">{t("nav_shop")}</p>
+                <p className="text-xs text-muted-foreground">{t("shop_subtitle")}</p>
               </div>
             </CardContent>
           </Card>
-          <Card className="cursor-pointer hover:border-primary/50 transition-colors" onClick={() => navigate("/track-order")}>
+          <Card className="card-interactive cursor-pointer" onClick={() => navigate("/track-order")}>
             <CardContent className="flex items-center gap-3 p-4">
               <Package className="h-8 w-8 text-primary" />
               <div>
-                <p className="font-semibold">Track Orders</p>
-                <p className="text-xs text-muted-foreground">View your order status</p>
+                <p className="font-semibold">{t("order_title")}</p>
+                <p className="text-xs text-muted-foreground">{t("dash_track_sub")}</p>
               </div>
             </CardContent>
           </Card>
@@ -93,112 +122,131 @@ const Dashboard = () => {
     );
   }
 
-  const kpiData = [
-    { title: "Today's Sales", value: "৳" + todaySales.toLocaleString(), icon: DollarSign, color: "text-emerald-600", path: "/admin/sales" },
-    { title: "Total Products", value: String(productCount), icon: Package, color: "text-blue-600", path: "/admin/inventory" },
-    { title: "Pending Orders", value: String(pendingOrders), icon: ShoppingCart, color: "text-amber-600", path: "/admin/orders" },
-    { title: "Low Stock Alerts", value: String(lowStockCount), icon: AlertTriangle, color: "text-destructive", path: "/admin/inventory" },
-    { title: "Monthly Revenue", value: "৳" + monthlyRevenue.toLocaleString(), icon: TrendingUp, color: "text-primary", path: "/admin/reports" },
-    { title: "Expiring Soon", value: String(expiringCount), icon: Clock, color: "text-amber-500", path: "/admin/inventory" },
+  const kpis = [
+    { title: t("dash_total_products"), value: String(productCount), icon: Package, color: "text-blue-500", path: "/inventory" },
+    { title: t("dash_low_stock"), value: String(lowStockCount), icon: AlertTriangle, color: "text-amber-500", path: "/inventory" },
+    { title: t("dash_today_sales"), value: "৳" + todaySales.toLocaleString(), icon: DollarSign, color: "text-emerald-500", path: "/sales" },
+    { title: t("dash_monthly_revenue"), value: "৳" + monthlyRevenue.toLocaleString(), icon: TrendingUp, color: "text-violet-500", path: "/reports" },
+    { title: t("dash_pending_orders"), value: String(pendingOrders), icon: ClipboardList, color: "text-amber-500", path: "/admin/orders" },
+    { title: t("dash_expiring_soon"), value: String(expiringCount), icon: Clock, color: "text-destructive", path: "/inventory" },
   ];
 
-  const quickActions = [
-    { title: "Customer Ledger", icon: Users, path: "/admin/customers" },
-    { title: "Inventory", icon: Package, path: "/admin/inventory" },
-    { title: "Orders", icon: ShoppingCart, path: "/admin/orders" },
-    { title: "Sales", icon: BarChart3, path: "/admin/sales" },
-    { title: "Reports", icon: FileText, path: "/admin/reports" },
-    { title: "Users", icon: Settings, path: "/admin/users" },
-  ];
+  const visibleTiles = NAV_TILES.filter((tile) => !("adminOnly" in tile && tile.adminOnly) || isAdmin);
 
   return (
-    <div className="space-y-4 sm:space-y-6">
-      <div>
-        <h1 className="text-xl sm:text-2xl font-bold text-foreground">Dashboard</h1>
-        <p className="text-xs sm:text-sm text-muted-foreground">Welcome to Medsuite-eT Pharmacy Management</p>
-      </div>
+    <motion.div className="space-y-5 sm:space-y-6" variants={containerVariants} initial="hidden" animate="visible">
+      <motion.div variants={itemVariants} className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+        <div>
+          <h1 className="text-xl sm:text-2xl font-bold text-foreground">{t("dash_title")}</h1>
+          <p className="text-xs sm:text-sm text-muted-foreground">{t("dash_welcome")}</p>
+        </div>
+        <Button variant="outline" size="sm" className="gap-2 shrink-0 transition-all duration-200 hover:border-primary/50" asChild>
+          <a href={WHATSAPP_HELP} target="_blank" rel="noopener noreferrer">
+            <MessageCircle className="h-4 w-4 text-emerald-500" />
+            {t("whatsapp_support")}
+          </a>
+        </Button>
+      </motion.div>
 
-      {/* Quick Actions */}
-      <div className="grid gap-2 grid-cols-2 sm:grid-cols-3 lg:grid-cols-6">
-        {quickActions.map((action) => (
-          <Button
-            key={action.title}
-            variant="outline"
-            className="h-auto flex flex-col items-center gap-2 p-4 cursor-pointer hover:border-primary/50 hover:bg-primary/5 transition-colors"
-            onClick={() => navigate(action.path)}
+      <motion.div variants={itemVariants} className="grid gap-2 grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6">
+        {visibleTiles.map((tile) => (
+          <button
+            key={tile.path}
+            type="button"
+            onClick={() => navigate(tile.path)}
+            className="card-interactive flex flex-col items-center gap-2 rounded-xl border border-border bg-card p-3 sm:p-4 text-center"
           >
-            <action.icon className="h-5 w-5" />
-            <span className="text-[10px] sm:text-xs text-center leading-tight">{action.title}</span>
-          </Button>
+            <span className={`flex h-10 w-10 items-center justify-center rounded-lg ${tile.color}`}>
+              <tile.icon className="h-5 w-5" />
+            </span>
+            <span className="text-[10px] sm:text-xs font-medium leading-tight text-foreground">{t(tile.titleKey)}</span>
+          </button>
         ))}
-      </div>
+      </motion.div>
 
-      {/* KPI Cards */}
-      <div className="grid gap-3 sm:gap-4 grid-cols-2 lg:grid-cols-3">
-        {kpiData.map((kpi) => (
-          <Card 
+      <motion.div variants={itemVariants} className="grid gap-3 grid-cols-2 md:grid-cols-3 lg:grid-cols-6">
+        {kpis.map((kpi) => (
+          <Card
             key={kpi.title}
-            className="cursor-pointer hover:border-primary/50 hover:bg-muted/50 transition-colors"
+            className="card-interactive cursor-pointer"
             onClick={() => navigate(kpi.path)}
           >
-            <CardHeader className="flex flex-row items-center justify-between pb-1 sm:pb-2 p-3 sm:p-6">
-              <CardTitle className="text-[10px] sm:text-sm font-medium text-muted-foreground leading-tight">{kpi.title}</CardTitle>
-              <kpi.icon className={`h-4 w-4 sm:h-5 sm:w-5 shrink-0 ${kpi.color}`} />
-            </CardHeader>
-            <CardContent className="p-3 pt-0 sm:p-6 sm:pt-0">
-              <div className="text-base sm:text-2xl font-bold truncate">{kpi.value}</div>
+            <CardContent className="p-3 sm:p-4 space-y-2">
+              <div className="flex items-center justify-between gap-2">
+                <p className="text-[10px] sm:text-xs text-muted-foreground leading-tight">{kpi.title}</p>
+                <kpi.icon className={`h-4 w-4 shrink-0 ${kpi.color}`} />
+              </div>
+              <p className="text-lg sm:text-xl font-bold truncate">{kpi.value}</p>
             </CardContent>
           </Card>
         ))}
-      </div>
+      </motion.div>
 
-      {/* Charts */}
-      <div className="grid gap-3 sm:gap-4 lg:grid-cols-2">
+      <motion.div variants={itemVariants} className="grid gap-3 sm:gap-4 lg:grid-cols-2">
         <Card>
           <CardHeader className="p-3 sm:p-6">
-            <CardTitle className="text-sm sm:text-base">Weekly Sales</CardTitle>
-            <CardDescription className="text-xs">POS revenue trend this week (৳)</CardDescription>
+            <CardTitle className="text-sm sm:text-base">{t("dash_weekly_sales")}</CardTitle>
+            <CardDescription className="text-xs">{t("dash_revenue_trend")}</CardDescription>
           </CardHeader>
           <CardContent className="p-3 pt-0 sm:p-6 sm:pt-0">
-            {weeklySales.length === 0 ? (
-              <p className="text-center text-muted-foreground py-12">No sales data yet</p>
+            {weeklySales.every((d) => d.sales === 0) ? (
+              <p className="text-center text-muted-foreground py-12 text-sm">{t("dash_no_sales")}</p>
             ) : (
               <ResponsiveContainer width="100%" height={220}>
-                <BarChart data={weeklySales}>
-                  <CartesianGrid strokeDasharray="3 3" className="stroke-border" />
-                  <XAxis dataKey="day" tick={{ fontSize: 11 }} /><YAxis tick={{ fontSize: 11 }} />
-                  <Tooltip />
-                  <Bar dataKey="sales" fill="hsl(174, 84%, 32%)" radius={[4, 4, 0, 0]} />
-                </BarChart>
+                <LineChart data={weeklySales}>
+                  <CartesianGrid strokeDasharray="3 3" className="stroke-border/60" />
+                  <XAxis dataKey="day" tick={{ fontSize: 11 }} />
+                  <YAxis tick={{ fontSize: 11 }} />
+                  <Tooltip
+                    formatter={(v: number) => [`৳${v.toLocaleString()}`, t("dash_sales")]}
+                    contentStyle={{ borderRadius: 8, border: "1px solid hsl(var(--border))" }}
+                  />
+                  <Line
+                    type="monotone"
+                    dataKey="sales"
+                    stroke="hsl(var(--primary))"
+                    strokeWidth={2}
+                    dot={{ fill: "hsl(var(--primary))", r: 4 }}
+                    activeDot={{ r: 6 }}
+                  />
+                </LineChart>
               </ResponsiveContainer>
             )}
           </CardContent>
         </Card>
+
         <Card>
           <CardHeader className="p-3 sm:p-6">
-            <CardTitle className="text-sm sm:text-base">Top Products by Stock</CardTitle>
+            <CardTitle className="text-sm sm:text-base">{t("dash_top_products")}</CardTitle>
+            <CardDescription className="text-xs">{t("dash_most_sold")}</CardDescription>
           </CardHeader>
           <CardContent className="p-3 pt-0 sm:p-6 sm:pt-0">
-            {topProducts.length === 0 ? (
-              <p className="text-center text-muted-foreground py-12">No products yet</p>
+            {topSelling.length === 0 ? (
+              <p className="text-center text-muted-foreground py-12 text-sm">{t("no_results")}</p>
             ) : (
-              <ResponsiveContainer width="100%" height={220}>
-                <PieChart>
-                  <Pie data={topProducts} cx="50%" cy="50%" outerRadius={80} dataKey="value" label={({ name }) => name}>
-                    {topProducts.map((_, i) => (<Cell key={i} fill={COLORS[i % COLORS.length]} />))}
-                  </Pie>
-                  <Tooltip />
-                </PieChart>
-              </ResponsiveContainer>
+              <ul className="space-y-2">
+                {topSelling.map((item, i) => (
+                  <li
+                    key={item.name}
+                    className="flex items-center justify-between gap-2 rounded-lg border border-border/60 bg-muted/30 px-3 py-2 text-sm transition-colors hover:bg-muted/50"
+                  >
+                    <span className="flex items-center gap-2 min-w-0">
+                      <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-primary/15 text-xs font-semibold text-primary">
+                        {i + 1}
+                      </span>
+                      <span className="truncate font-medium">{item.name}</span>
+                    </span>
+                    <span className="shrink-0 text-muted-foreground">{item.qty} {t("dash_units")}</span>
+                  </li>
+                ))}
+              </ul>
             )}
           </CardContent>
         </Card>
-      </div>
+      </motion.div>
 
-      {showOnboarding && (
-        <Onboarding onComplete={() => setShowOnboarding(false)} />
-      )}
-    </div>
+      {showOnboarding && <Onboarding onComplete={() => setShowOnboarding(false)} />}
+    </motion.div>
   );
 };
 

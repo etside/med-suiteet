@@ -22,9 +22,9 @@ export const PageTransition = ({ children }: PageTransitionProps) => {
   };
 
   const pageTransition = {
-    type: "tween",
-    ease: "anticipate",
-    duration: 0.5,
+    type: "tween" as const,
+    ease: [0.25, 0.1, 0.25, 1] as const,
+    duration: 0.35,
   };
 
   return (

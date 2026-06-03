@@ -2,8 +2,9 @@ import { useState, useEffect } from "react";
 import { Link, useLocation } from "react-router-dom";
 import {
   LayoutDashboard, Package, Warehouse, ShoppingCart, ClipboardList,
-  BarChart3, Settings, Shield, Users, QrCode, Sun, Moon, Store, Truck, LogOut, ClipboardCheck, BookUser, MessageCircle, User, FileText,
+  BarChart3, Settings, Shield, Users, QrCode, Sun, Moon, Store, Truck, LogOut, ClipboardCheck, BookUser, MessageCircle, User, FileText, Building2, Bell,
 } from "lucide-react";
+import { PwaInstallButton } from "@/components/PwaInstallButton";
 import { useTheme } from "@/components/ThemeProvider";
 import { Button } from "@/components/ui/button";
 import { useLanguage } from "@/contexts/LanguageContext";
@@ -32,12 +33,14 @@ export function AppSidebar() {
 
   const mainNav = isStaff ? [
     { title: t("nav_dashboard"), icon: LayoutDashboard, href: "/" },
-    { title: t("nav_products"), icon: Package, href: "/products" },
-    { title: t("nav_inventory"), icon: Warehouse, href: "/inventory" },
     { title: t("nav_sales"), icon: ShoppingCart, href: "/sales" },
+    { title: t("nav_products"), icon: Package, href: "/products" },
+    { title: t("nav_manufacturers"), icon: Building2, href: "/manufacturers" },
+    { title: t("nav_inventory"), icon: Warehouse, href: "/inventory" },
     { title: t("nav_purchases"), icon: ClipboardList, href: "/purchases" },
     { title: t("nav_qr_scanner"), icon: QrCode, href: "/qr-scanner" },
     { title: t("nav_reports"), icon: BarChart3, href: "/reports" },
+    { title: t("nav_notifications"), icon: Bell, href: "/notifications" },
   ] : [];
 
   const customerNav = [
@@ -128,9 +131,10 @@ export function AppSidebar() {
           </Link>
         )}
         <Button variant="ghost" size="sm" className="w-full justify-start gap-2" asChild>
-          <Link to="/profile"><User className="h-4 w-4" /><span>My Profile</span></Link>
+          <Link to="/profile"><User className="h-4 w-4" /><span>{t("nav_profile")}</span></Link>
         </Button>
         <LanguageToggle />
+        <PwaInstallButton />
         <Button variant="ghost" size="sm" className="w-full justify-start gap-2"
           onClick={() => setTheme(resolvedTheme === "dark" ? "light" : "dark")}>
           {resolvedTheme === "dark" ? <Sun className="h-4 w-4" /> : <Moon className="h-4 w-4" />}
@@ -139,7 +143,7 @@ export function AppSidebar() {
         <Button variant="ghost" size="sm" className="w-full justify-start gap-2" asChild>
           <a href={WHATSAPP_HELP} target="_blank" rel="noopener noreferrer">
             <MessageCircle className="h-4 w-4" />
-            <span>Help & Support</span>
+            <span>{t("whatsapp_support")}</span>
           </a>
         </Button>
         {user && (

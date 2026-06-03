@@ -30,7 +30,10 @@ import Checkout from "./pages/Checkout";
 import OrderTracking from "./pages/OrderTracking";
 import CustomerLedger from "./pages/CustomerLedger";
 import Profile from "./pages/Profile";
+import Manufacturers from "./pages/Manufacturers";
+import Notifications from "./pages/Notifications";
 import NotFound from "./pages/NotFound";
+import { AnimatedOutlet } from "@/components/AnimatedRoutes";
 
 const queryClient = new QueryClient();
 
@@ -87,24 +90,28 @@ function ProtectedRoutes() {
   return (
     <AppLayout>
       <Routes>
-        <Route path="/" element={<Dashboard />} />
-        <Route path="/products" element={<Products />} />
-        <Route path="/inventory" element={<Inventory />} />
-        <Route path="/sales" element={<Sales />} />
-        <Route path="/purchases" element={<Purchases />} />
-        <Route path="/qr-scanner" element={<QrScanner />} />
-        <Route path="/reports" element={<Reports />} />
-        <Route path="/admin" element={<AdminPanel />} />
-        <Route path="/admin/orders" element={<AdminOrders />} />
-        <Route path="/admin/users" element={<UserManagement />} />
-        <Route path="/admin/customers" element={<CustomerLedger />} />
-        <Route path="/admin/cms" element={<CMS />} />
-        <Route path="/settings" element={<SettingsPage />} />
-        <Route path="/profile" element={<Profile />} />
-        <Route path="/shop" element={<Shop />} />
-        <Route path="/checkout" element={<Checkout />} />
-        <Route path="/track-order" element={<OrderTracking />} />
-        <Route path="*" element={<NotFound />} />
+        <Route element={<AnimatedOutlet />}>
+          <Route path="/" element={<Dashboard />} />
+          <Route path="/products" element={<Products />} />
+          <Route path="/manufacturers" element={<Manufacturers />} />
+          <Route path="/inventory" element={<Inventory />} />
+          <Route path="/sales" element={<Sales />} />
+          <Route path="/purchases" element={<Purchases />} />
+          <Route path="/qr-scanner" element={<QrScanner />} />
+          <Route path="/reports" element={<Reports />} />
+          <Route path="/admin" element={<AdminPanel />} />
+          <Route path="/admin/orders" element={<AdminOrders />} />
+          <Route path="/admin/users" element={<UserManagement />} />
+          <Route path="/admin/customers" element={<CustomerLedger />} />
+          <Route path="/admin/cms" element={<CMS />} />
+          <Route path="/settings" element={<SettingsPage />} />
+          <Route path="/profile" element={<Profile />} />
+          <Route path="/notifications" element={<Notifications />} />
+          <Route path="/shop" element={<Shop />} />
+          <Route path="/checkout" element={<Checkout />} />
+          <Route path="/track-order" element={<OrderTracking />} />
+          <Route path="*" element={<NotFound />} />
+        </Route>
       </Routes>
     </AppLayout>
   );
