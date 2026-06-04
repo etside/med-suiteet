@@ -31,7 +31,9 @@ const Products = () => {
   const [barcodeOpen, setBarcodeOpen] = useState(false);
 
   const fetchProducts = () => {
-    api.products.list().then((data) => setProducts(data as any[])).catch(() => {});
+    api.products.list()
+      .then((data) => setProducts(data as any[]))
+      .catch((e: unknown) => toast.error("Failed to load products: " + (e instanceof Error ? e.message : "Unknown error")));
   };
 
   useEffect(() => { fetchProducts(); }, []);
@@ -99,8 +101,8 @@ const Products = () => {
             </div>
           </div>
         </CardHeader>
-        <CardContent className="overflow-auto">
-          <Table>
+        <CardContent className="overflow-x-auto -mx-3 px-3 sm:mx-0 sm:px-0">
+          <Table className="min-w-[720px]">
             <TableHeader>
               <TableRow>
                 <TableHead>Image</TableHead>

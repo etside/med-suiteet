@@ -7,6 +7,7 @@ import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Search, Users, Eye } from "lucide-react";
 import { api } from "@/lib/api";
+import { toast } from "sonner";
 
 interface CustomerData {
   user_id: string;
@@ -30,8 +31,14 @@ const CustomerLedger = () => {
   }, []);
 
   const fetchCustomers = async () => {
-    const profiles = await api.profiles.list();
-    const orderData = await api.orders.list();
+    let profiles: Awaited<ReturnType<typeof api.profiles.list>>;
+    let orderData: Awaited<ReturnType<typeof api.orders.list>>;
+    try {
+      [profiles, orderData] = await Promise.all([api.profiles.list(), api.orders.list()]);
+    } catch (e: unknown) {
+      toast.error("Failed to load ledger: " + (e instanceof Error ? e.message : "Unknown error"));
+      return;
+    }
     if (!profiles.length) return;
 
     const orderMap: Record<string, { count: number; total: number; paid: number }> = {};
@@ -96,8 +103,8 @@ const CustomerLedger = () => {
             </div>
           </div>
         </CardHeader>
-        <CardContent className="overflow-auto">
-          <Table>
+        <CardContent className="overflow-x-auto -mx-3 px-3 sm:mx-0 sm:px-0">
+          <Table className="min-w-[640px]">
             <TableHeader>
               <TableRow>
                 <TableHead>Customer</TableHead>

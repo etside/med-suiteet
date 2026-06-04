@@ -22,6 +22,9 @@ function normalizeProduct(row: Record<string, unknown>): Record<string, unknown>
   if (p.min_quantity !== undefined && p.min_stock === undefined) {
     p.min_stock = p.min_quantity;
   }
+  if (p.stock !== undefined) p.stock = Number(p.stock) || 0;
+  if (p.min_stock !== undefined) p.min_stock = Number(p.min_stock) || 0;
+  if (p.price !== undefined) p.price = Number(p.price) || 0;
   return p;
 }
 

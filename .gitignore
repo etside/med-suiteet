@@ -12,6 +12,9 @@ dist
 dist-ssr
 *.local
 
+# Local product spreadsheets (seed via npm run seed:products:neon)
+*.xlsx
+
 # Environment & secrets
 .env
 .env.local

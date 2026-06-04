@@ -10,6 +10,7 @@ import { ExcelImportExport } from "@/components/ExcelImportExport";
 import { UserManual } from "@/components/UserManual";
 import { BarcodeGenerator } from "@/components/BarcodeGenerator";
 import { useAuth } from "@/contexts/AuthContext";
+import { toast } from "sonner";
 
 const Inventory = () => {
   const { isStaff } = useAuth();
@@ -17,10 +18,12 @@ const Inventory = () => {
   const [barcodeOpen, setBarcodeOpen] = useState(false);
 
   const fetchProducts = () => {
-    api.products.list().then((data) => {
-      const sorted = [...(data as any[])].sort((a, b) => Number(a.stock) - Number(b.stock));
-      setProducts(sorted);
-    }).catch(() => {});
+    api.products.list()
+      .then((data) => {
+        const sorted = [...(data as any[])].sort((a, b) => Number(a.stock) - Number(b.stock));
+        setProducts(sorted);
+      })
+      .catch((e: unknown) => toast.error("Failed to load inventory: " + (e instanceof Error ? e.message : "Unknown error")));
   };
 
   useEffect(() => { fetchProducts(); }, []);
@@ -95,8 +98,8 @@ const Inventory = () => {
           <CardTitle>Stock Overview</CardTitle>
           <CardDescription>Current inventory levels with expiry tracking & barcodes</CardDescription>
         </CardHeader>
-        <CardContent className="overflow-auto">
-          <Table>
+        <CardContent className="overflow-x-auto -mx-3 px-3 sm:mx-0 sm:px-0">
+          <Table className="min-w-[560px]">
             <TableHeader>
               <TableRow>
                 <TableHead>Product</TableHead>

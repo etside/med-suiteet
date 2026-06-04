@@ -31,7 +31,9 @@ const Purchases = () => {
       setOrders(po as any[]);
       setSuppliers((sup as any[]).sort((a, b) => String(a.name).localeCompare(String(b.name))));
       setProducts((prod as any[]).sort((a, b) => String(a.name).localeCompare(String(b.name))));
-    } catch { /* ignore */ }
+    } catch (e: unknown) {
+      toast.error("Failed to load purchases: " + (e instanceof Error ? e.message : "Unknown error"));
+    }
   };
 
   useEffect(() => { fetchAll(); }, []);
@@ -142,8 +144,8 @@ const Purchases = () => {
 
       <Card>
         <CardHeader><CardTitle>All Purchase Orders ({orders.length})</CardTitle></CardHeader>
-        <CardContent className="overflow-auto">
-          <Table>
+        <CardContent className="overflow-x-auto -mx-3 px-3 sm:mx-0 sm:px-0">
+          <Table className="min-w-[640px]">
             <TableHeader>
               <TableRow>
                 <TableHead>PO Number</TableHead>

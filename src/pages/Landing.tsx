@@ -146,12 +146,12 @@ const Landing = () => {
               </button>
             </div>
 
-            <div className="flex items-center gap-2">
+            <div className="flex items-center gap-1.5 sm:gap-2 shrink-0">
               <Button
                 variant="ghost"
                 size="sm"
                 onClick={() => setIsDark(!isDark)}
-                className="gap-1"
+                className="gap-1 px-2"
               >
                 {isDark ? <Sun className="h-4 w-4" /> : <Moon className="h-4 w-4" />}
               </Button>
@@ -160,15 +160,17 @@ const Landing = () => {
                 size="sm"
                 variant="outline"
                 onClick={() => navigate("/auth")}
+                className="hidden sm:inline-flex"
               >
                 লগইন
               </Button>
               <Button
                 size="sm"
                 onClick={() => navigate("/auth")}
-                className="gap-1"
+                className="gap-1 px-2 sm:px-3"
               >
-                শুরু করুন
+                <span className="hidden sm:inline">শুরু করুন</span>
+                <span className="sm:hidden">শুরু</span>
                 <ArrowRight className="h-4 w-4" />
               </Button>
             </div>
