@@ -55,6 +55,15 @@ if (!url) {
 
 const { products, skippedNoName } = parseMedProductsXlsx(xlsxPath);
 console.log(`Parsed ${products.length} products (${skippedNoName} rows without name)`);
+const deduped = [];
+const seenKeys = new Map();
+for (const p of products) seenKeys.set(p.import_key, p);
+for (const p of seenKeys.values()) deduped.push(p);
+if (deduped.length !== products.length) {
+  console.log(`Deduped ${products.length - deduped.length} rows with duplicate import_key`);
+}
+products.length = 0;
+products.push(...deduped);
 
 const pool = new pg.Pool({ connectionString: url, max: 1 });
 const BATCH = 100;
