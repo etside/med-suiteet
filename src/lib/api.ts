@@ -97,7 +97,7 @@ async function request<T>(
   });
 
   const json = await res.json().catch(() => ({}));
-  if (!res.ok) {
+  if (!res.ok || json.error) {
     throw new ApiError(json.error || res.statusText || "Request failed", res.status);
   }
   return json as T;
