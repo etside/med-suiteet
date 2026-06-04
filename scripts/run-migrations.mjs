@@ -12,6 +12,7 @@
 import { readFileSync, existsSync } from 'fs';
 import { dirname, join } from 'path';
 import { fileURLToPath } from 'url';
+import { spawnSync } from 'child_process';
 import pg from 'pg';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
@@ -25,7 +26,11 @@ const MIGRATIONS = [
   { name: 'add_manufacturer', file: 'add_manufacturer.pg.sql' },
   { name: 'add_biometric', file: 'add_biometric.pg.sql' },
   { name: 'add_cms', file: 'add_cms.pg.sql' },
+  { name: 'seed_med_products', file: 'seed_med_products.pg.sql', seedScript: 'scripts/seed-med-products-neon.mjs' },
+  { name: 'neon_app_tables', file: 'neon_app_tables.pg.sql' },
 ];
+
+const defaultMedProductsXlsx = join(root, 'Med-products.xlsx');
 
 function loadEnv() {
   const envPath = join(root, '.env');
@@ -76,6 +81,9 @@ async function verify(client) {
     { label: 'products.manufacturer', sql: `SELECT 1 FROM information_schema.columns WHERE table_schema='public' AND table_name='products' AND column_name='manufacturer'` },
     { label: 'users.biometric_enrolled', sql: `SELECT 1 FROM information_schema.columns WHERE table_schema='public' AND table_name='users' AND column_name='biometric_enrolled'` },
     { label: 'cms_content table', sql: `SELECT 1 FROM information_schema.tables WHERE table_schema='public' AND table_name='cms_content'` },
+    { label: 'order_items table', sql: `SELECT 1 FROM information_schema.tables WHERE table_schema='public' AND table_name='order_items'` },
+    { label: 'sales table', sql: `SELECT 1 FROM information_schema.tables WHERE table_schema='public' AND table_name='sales'` },
+    { label: 'profiles table', sql: `SELECT 1 FROM information_schema.tables WHERE table_schema='public' AND table_name='profiles'` },
   ];
   console.log('\nVerification:');
   for (const c of checks) {
@@ -139,6 +147,25 @@ try {
         await client.query('COMMIT');
         console.log('applied', m.name, `(${m.file})`);
         ran++;
+
+        if (m.seedScript) {
+          const scriptPath = join(root, m.seedScript);
+          if (!existsSync(scriptPath)) {
+            throw new Error(`Seed script missing: ${scriptPath}`);
+          }
+          console.log('running seed', m.seedScript);
+          const seedArgs = ['--if-empty', defaultMedProductsXlsx];
+          const seed = spawnSync('node', [scriptPath, ...seedArgs], {
+            cwd: root,
+            encoding: 'utf8',
+            stdio: ['ignore', 'pipe', 'pipe'],
+          });
+          if (seed.stdout) process.stdout.write(seed.stdout);
+          if (seed.stderr) process.stderr.write(seed.stderr);
+          if (seed.status !== 0) {
+            console.error('WARN: Seed script failed — re-run manually: npm run seed:products:neon');
+          }
+        }
       } catch (e) {
         await client.query('ROLLBACK');
         throw e;

@@ -13,6 +13,22 @@ function resolveApiBase(): string {
 
 const API_BASE = resolveApiBase();
 
+/** Map PostgreSQL column names to frontend field names (quantity → stock). */
+function normalizeProduct(row: Record<string, unknown>): Record<string, unknown> {
+  const p = { ...row };
+  if (p.quantity !== undefined && p.stock === undefined) {
+    p.stock = p.quantity;
+  }
+  if (p.min_quantity !== undefined && p.min_stock === undefined) {
+    p.min_stock = p.min_quantity;
+  }
+  return p;
+}
+
+function normalizeProducts(rows: Record<string, unknown>[]) {
+  return rows.map(normalizeProduct);
+}
+
 // Alternative PostgreSQL endpoint (optional)
 export const POSTGRES_API_URL = import.meta.env.VITE_POSTGRES_API || null;
 
@@ -206,8 +222,11 @@ export const api = {
           ...(query?.search ? { search: query.search } : {}),
           limit: String(query?.limit ?? 10000),
         },
-      }).then((r) => r.data),
-    get: (id: string) => request<{ data: Record<string, unknown> }>("product", { query: { id } }).then((r) => r.data),
+      }).then((r) => normalizeProducts(r.data as Record<string, unknown>[])),
+    get: (id: string) =>
+      request<{ data: Record<string, unknown> }>("product", { query: { id } }).then((r) =>
+        normalizeProduct(r.data)
+      ),
     create: (payload: Record<string, unknown>) =>
       request("products", { method: "POST", body: payload }),
     update: (id: string, payload: Record<string, unknown>) =>

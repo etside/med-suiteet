@@ -1,23 +1,26 @@
 #!/usr/bin/env node
 /**
- * Bulk-import products from Med-products.xlsx into MySQL (CLI).
- * Usage: node scripts/import-med-products.mjs [/path/to/file.xlsx] [--replace]
+ * Bulk-import products from Med-products.xlsx.
+ * - Neon/PostgreSQL when DATABASE_URL is set in .env (import_key upsert)
+ * - MySQL via PHP CLI when DATABASE_URL is unset and public/api/config.php exists
+ *
+ * Usage:
+ *   node scripts/import-med-products.mjs [/path/to/file.xlsx] [--replace] [--mysql]
  */
 import { readFileSync, existsSync } from "fs";
-import { createRequire } from "module";
 import { spawnSync } from "child_process";
 import { fileURLToPath } from "url";
 import { dirname, join } from "path";
-
-const require = createRequire(import.meta.url);
-const XLSX = require("xlsx");
+import pg from "pg";
+import { parseMedProductsXlsx } from "./lib/med-products-parser.mjs";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const root = join(__dirname, "..");
-const defaultXlsx = "/home/tjms/Downloads/Med-products.xlsx";
+const defaultXlsx = join(root, "Med-products.xlsx");
 
 const args = process.argv.slice(2);
 const replace = args.includes("--replace");
+const forceMysql = args.includes("--mysql");
 const xlsxPath = args.find((a) => !a.startsWith("--")) || defaultXlsx;
 
 if (!existsSync(xlsxPath)) {
@@ -25,55 +28,120 @@ if (!existsSync(xlsxPath)) {
   process.exit(1);
 }
 
-function parsePhpConfig() {
-  const configPath = join(root, "public/api/config.php");
-  const src = readFileSync(configPath, "utf8");
-  const pick = (key) => {
-    const m = src.match(new RegExp(`'${key}'\\s*=>\\s*'([^']*)'`));
-    return m ? m[1] : "";
-  };
-  return {
-    db_host: pick("db_host") || "127.0.0.1",
-    db_port: pick("db_port") || "3306",
-    db_name: pick("db_name") || "medsuite",
-    db_user: pick("db_user"),
-    db_pass: pick("db_pass"),
-  };
+function loadEnv() {
+  const envPath = join(root, ".env");
+  if (!existsSync(envPath)) return;
+  for (const line of readFileSync(envPath, "utf8").split("\n")) {
+    const m = line.match(/^\s*([A-Za-z_][A-Za-z0-9_]*)\s*=\s*(.*)$/);
+    if (!m || m[1].startsWith("#")) continue;
+    let v = m[2].trim();
+    if ((v.startsWith('"') && v.endsWith('"')) || (v.startsWith("'") && v.endsWith("'"))) {
+      v = v.slice(1, -1);
+    }
+    if (!process.env[m[1]]) process.env[m[1]] = v;
+  }
 }
 
-function buildDescription(row) {
-  const parts = [];
-  if (row.strength) parts.push(`Strength: ${row.strength}`);
-  if (row.dosage_form) parts.push(`Form: ${row.dosage_form}`);
-  if (row.drug_class) parts.push(`Class: ${row.drug_class}`);
-  if (row.indication) parts.push(`Indication: ${row.indication}`);
-  if (row.pieces_per_box && Number(row.pieces_per_box) !== 1) {
-    parts.push(`Pieces/box: ${row.pieces_per_box}`);
+const { products, skippedNoName } = parseMedProductsXlsx(xlsxPath);
+console.log(`Parsed ${products.length} products (${skippedNoName} rows without name)`);
+
+loadEnv();
+
+async function importToNeon() {
+  const url = process.env.DATABASE_URL;
+  if (!url) {
+    console.error("DATABASE_URL not set in .env");
+    process.exit(1);
   }
-  if (row.pieces_per_leaf && Number(row.pieces_per_leaf) !== 1) {
-    parts.push(`Pieces/leaf: ${row.pieces_per_leaf}`);
+
+  const pool = new pg.Pool({ connectionString: url, max: 1 });
+  const client = await pool.connect();
+  const BATCH = 100;
+  const COLS = 13;
+  const upsertHead = `
+    INSERT INTO products (
+      name, name_bn, generic_name, manufacturer, category, price,
+      quantity, min_quantity, batch_number, expiry_date,
+      requires_prescription, description, import_key
+    ) VALUES `;
+  const upsertTail = `
+    ON CONFLICT (import_key) DO UPDATE SET
+      name_bn = EXCLUDED.name_bn,
+      generic_name = EXCLUDED.generic_name,
+      manufacturer = EXCLUDED.manufacturer,
+      category = EXCLUDED.category,
+      price = EXCLUDED.price,
+      quantity = EXCLUDED.quantity,
+      min_quantity = EXCLUDED.min_quantity,
+      batch_number = EXCLUDED.batch_number,
+      expiry_date = EXCLUDED.expiry_date,
+      requires_prescription = EXCLUDED.requires_prescription,
+      description = EXCLUDED.description,
+      updated_at = NOW()
+  `;
+
+  try {
+    await client.query("BEGIN");
+    if (replace) {
+      await client.query("DELETE FROM products");
+      console.log("✓ Cleared products table");
+    }
+
+    let imported = 0;
+    for (let i = 0; i < products.length; i += BATCH) {
+      const batch = products.slice(i, i + BATCH);
+      const params = [];
+      const tuples = batch.map((p, rowIdx) => {
+        const offset = rowIdx * COLS;
+        params.push(
+          p.name,
+          p.name_bn,
+          p.generic_name,
+          p.manufacturer,
+          p.category,
+          p.price,
+          p.stock,
+          p.min_stock,
+          p.batch_number,
+          p.expiry_date,
+          p.requires_prescription,
+          p.description,
+          p.import_key
+        );
+        const ph = Array.from({ length: COLS }, (_, c) => `$${offset + c + 1}`);
+        return `(${ph.join(", ")})`;
+      });
+      await client.query(`${upsertHead}${tuples.join(", ")}${upsertTail}`, params);
+      imported += batch.length;
+      if (imported % 1500 === 0 || imported === products.length) {
+        console.log(`  … ${imported} / ${products.length}`);
+      }
+    }
+    await client.query("COMMIT");
+    const total = await pool.query("SELECT COUNT(*)::int AS n FROM products");
+    console.log(`✓ Upserted ${imported} rows into Neon PostgreSQL`);
+    console.log(`✓ Total products in database: ${total.rows[0].n}`);
+  } catch (e) {
+    await client.query("ROLLBACK");
+    console.error("Import failed:", e.message);
+    process.exit(1);
+  } finally {
+    client.release();
+    await pool.end();
   }
-  const base = row.description ? String(row.description).trim() : "";
-  if (base && parts.length) return `${base} | ${parts.join(" | ")}`;
-  if (base) return base;
-  return parts.length ? parts.join(" | ") : null;
 }
 
-function normalizeExpiry(val) {
-  if (!val) return null;
-  if (val instanceof Date) {
-    return val.toISOString().slice(0, 10);
-  }
-  const s = String(val).trim();
-  if (!s) return null;
-  if (/^\d{4}-\d{2}-\d{2}$/.test(s)) return s;
-  const n = Number(s);
-  if (!Number.isNaN(n) && n > 30000) {
-    const epoch = new Date(Date.UTC(1899, 11, 30));
-    epoch.setUTCDate(epoch.getUTCDate() + n);
-    return epoch.toISOString().slice(0, 10);
-  }
-  return s.slice(0, 10);
+if (!forceMysql && process.env.DATABASE_URL) {
+  await importToNeon();
+  process.exit(0);
+}
+
+const configPhp = join(root, "public/api/config.php");
+if (!existsSync(configPhp)) {
+  console.error(
+    "No DATABASE_URL in .env and no public/api/config.php — set Neon URL or copy config.example.php"
+  );
+  process.exit(1);
 }
 
 function uuid() {
@@ -84,44 +152,14 @@ function uuid() {
   });
 }
 
-const wb = XLSX.readFile(xlsxPath);
-const sheet = wb.Sheets[wb.SheetNames[0]];
-const rows = XLSX.utils.sheet_to_json(sheet, { defval: "" });
-
-const products = [];
-let skippedNoName = 0;
-for (const row of rows) {
-  const name = String(row.name ?? "").trim();
-  if (!name) {
-    skippedNoName++;
-    continue;
-  }
-  const rx = row.requires_prescription;
-  const requires =
-    rx === true ||
-    rx === 1 ||
-    String(rx).toLowerCase() === "true" ||
-    String(rx).toLowerCase() === "yes";
-  products.push({
+const payload = JSON.stringify({
+  replace,
+  products: products.map((p) => ({
     id: uuid(),
-    name,
-    name_bn: String(row.name_bn ?? "").trim() || null,
-    generic_name: String(row.generic_name ?? "").trim() || null,
-    manufacturer: String(row.manufacturer ?? "").trim() || null,
-    category: String(row.category ?? "").trim() || null,
-    price: Number(row.price) || 0,
-    stock: Number(row.stock) || 0,
-    min_stock: Number(row.min_stock) || 10,
-    batch_number: String(row.batch_number ?? "").trim() || null,
-    expiry_date: normalizeExpiry(row.expiry_date),
-    requires_prescription: requires ? 1 : 0,
-    description: buildDescription(row),
-  });
-}
-
-console.log(`Parsed ${products.length} products (${skippedNoName} rows without name)`);
-
-const payload = JSON.stringify({ replace, products });
+    ...p,
+    requires_prescription: p.requires_prescription ? 1 : 0,
+  })),
+});
 const phpScript = join(root, "public/api/import-products-cli.php");
 const result = spawnSync("php", [phpScript], {
   input: payload,
